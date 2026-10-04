@@ -1,0 +1,33 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+web/dist/
+
+# local data & secrets
+data/
+server/.env
+server/openterm.db
+server/openterm.db-shm
+server/openterm.db-wal
+*.log
+
+# build artifacts (tsc emitting vite.config / incremental builds)
+web/vite.config.js
+web/vite.config.d.ts
+*.tsbuildinfo
+
+# tool state
+.omc/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

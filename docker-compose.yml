@@ -1,0 +1,14 @@
+services:
+  server:
+    build: ./server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./server:/app
+    environment:
+      OPENTERM_DATA_DIR: /data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  # For local dev the web app runs via `npm run dev` (Vite proxies /api to :8000).
+  # Add a web container here when packaging for LAN deployment.
