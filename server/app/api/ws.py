@@ -13,6 +13,7 @@ Server → client:
   {"type":"quote","symbol":…,"last":…,"bid":…,"ask":…,"ts_ms":…}
   {"type":"trade","symbol":…,"price":…,"size":…,"side":"buy"|"sell"|"","ts_ms":…}
   {"type":"book","symbol":…,"bids":[[price,size],…],"asks":[[price,size],…],"ts_ms":…}
+  {"type":"alert",…} / {"type":"paper",…}   — only to the owning user
 
 Higher timeframes are aggregated live from the 1m event stream per subscriber,
 using the same bucketing as the history resample so displayed bars match
@@ -31,7 +32,7 @@ from app import runtime as runtime_module
 from app.auth.security import decode_token
 from app.candles.aggregator import BookEvent, QuoteEvent, TradeEvent
 from app.candles.resample import TF_SECONDS, bucket_start_s
-from app.models import Bar, BarEvent
+from app.models import Bar, BarEvent, UserEvent
 
 log = logging.getLogger("openterm.ws")
 router = APIRouter()
@@ -115,6 +116,7 @@ async def stream(ws: WebSocket):
         await ws.close(code=4401)  # unauthorized
         return
     await ws.accept()
+    user_id = int(payload["sub"])
 
     q = runtime.bus.subscribe()
     subs: set[tuple[str, str]] = set()
@@ -199,6 +201,9 @@ async def stream(ws: WebSocket):
             elif isinstance(ev, BookEvent):
                 if ev.symbol in book_syms:
                     await send(ev.to_ws())
+            elif isinstance(ev, UserEvent):
+                if ev.user_id == user_id:
+                    await send(ev.payload)
 
     # Run both directions; whichever ends first (client gone, send failed)
     # tears the other down so the bus subscription is always released.

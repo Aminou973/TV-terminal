@@ -31,6 +31,8 @@ class IngestManager:
         self.last_book: dict[str, BookEvent] = {}
         self._last_book_push: dict[str, float] = {}
         self.book_throttle_s = 0.25
+        # sync callbacks run for every tick after candle aggregation (alerts, paper fills)
+        self.tick_listeners: list = []
 
     # -- lifecycle -------------------------------------------------------------
     async def start(self) -> None:
@@ -93,6 +95,8 @@ class IngestManager:
             tick = await self.queue.get()
             try:
                 self.aggregator.process_tick(tick)
+                for listener in self.tick_listeners:
+                    listener(tick)
             except Exception:  # noqa: BLE001 — one bad tick must not stop the engine
                 log.exception("failed processing tick %s", tick)
 

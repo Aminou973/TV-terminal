@@ -117,3 +117,47 @@ def test_ws_survives_bad_messages_and_streams_trades_and_book(client):
             if {"trade", "book", "bar"} <= seen:
                 break
         assert {"trade", "book", "bar"} <= seen
+
+
+def test_workspace_crud(client):
+    h = _auth_headers(_register_and_token(client))
+    assert client.put("/api/watchlists", json={"name": "Main", "symbols": ["ES", "NQ"]}, headers=h).status_code == 200
+    assert client.get("/api/watchlists", headers=h).json()[0]["symbols"] == ["ES", "NQ"]
+    client.put("/api/layouts", json={"name": "Default", "spec": {"grid": "2x1"}}, headers=h)
+    assert client.get("/api/layouts", headers=h).json()[0]["spec"] == {"grid": "2x1"}
+    client.put("/api/drawings/SIM:ES", json={"data": [{"kind": "trend-line"}]}, headers=h)
+    assert client.get("/api/drawings/SIM:ES", headers=h).json()["data"] == [{"kind": "trend-line"}]
+    s = client.put("/api/scripts", json={"name": "My MA", "kind": "indicator", "source": "plot(close)"}, headers=h)
+    assert s.status_code == 200
+    assert client.delete(f"/api/scripts/{s.json()['id']}", headers=h).json() == {"ok": True}
+    # another user can't see them
+    other = _auth_headers(_register_and_token(client))
+    assert client.get("/api/watchlists", headers=other).json() == []
+
+
+def test_alerts_and_paper_api(client):
+    h = _auth_headers(_register_and_token(client))
+    a = client.post("/api/alerts", json={"symbol": "SIM:ES", "condition": "greater", "price": 1}, headers=h)
+    assert a.status_code == 200
+    with client.websocket_connect(f"/api/stream?token={h['Authorization'][7:]}") as ws:
+        for _ in range(100):
+            msg = json.loads(ws.receive_text())
+            if msg["type"] == "alert":
+                break
+        assert msg["type"] == "alert" and msg["symbol"] == "SIM:ES"
+    o = client.post("/api/paper/orders", json={"symbol": "SIM:ES", "side": "buy", "qty": 1}, headers=h)
+    assert o.status_code == 200 and o.json()["status"] == "filled"
+    acct = client.get("/api/paper/account", headers=h).json()
+    assert acct["positions"][0]["qty"] == 1
+    assert client.post("/api/paper/positions/SIM:ES/close", headers=h).status_code == 200
+    assert client.post("/api/paper/orders", json={"symbol": "SIM:ES", "side": "buy", "type": "limit", "qty": 1}, headers=h).status_code == 400
+
+
+def test_history_limit_stats_screener(client):
+    h = _auth_headers(_register_and_token(client))
+    r = client.get("/api/history", params={"symbol": "SIM:ES", "tf": "1m", "limit": 1}, headers=h)
+    assert len(r.json()["bars"]) == 1
+    st = client.get("/api/stats", params={"symbol": "SIM:ES"}, headers=h).json()
+    assert {"last", "change_pct", "high", "low"} <= set(st)
+    rows = client.get("/api/screener", headers=h).json()["rows"]
+    assert any(r["symbol"] == "SIM:ES" for r in rows)

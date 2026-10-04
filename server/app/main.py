@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import runtime as runtime_mod
-from app.api import rest, ws
+from app.api import alerts, paper, rest, workspace, ws
 from app.auth import router as auth_router
 from app.config import settings
 from app.db.database import database
@@ -45,3 +45,6 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(rest.router)
 app.include_router(ws.router)
+app.include_router(workspace.router)
+app.include_router(alerts.router)
+app.include_router(paper.router)
