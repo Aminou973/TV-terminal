@@ -1,8 +1,9 @@
 """Parquet candle storage: one file per symbol per day under data/candles/<symbol>/1m/.
 
-Closed 1m bars append to an in-memory buffer; a flusher rewrites the current
-day's file (small — ≤ ~1440 rows) every few seconds. Symbols are sanitized to
-be safe as Windows folder names.
+Closed 1m bars append to an in-memory buffer; a flusher merges them into the
+day's file (small — ≤ ~1440 rows) every few seconds and releases the buffer.
+Symbols are sanitized to be safe as Windows folder names; the original name
+is kept in <symbol>/symbol.txt so listings round-trip (SIM:ES, not SIM-ES).
 """
 
 from __future__ import annotations
@@ -33,11 +34,13 @@ class CandleParquetStore:
         # buffer keyed by (symbol_dir, day) -> list[Bar] (sorted by time)
         self._buffers: dict[tuple[str, str], list[Bar]] = {}
         self._dirty: set[tuple[str, str]] = set()
+        self._names: dict[str, str] = {}  # sanitized dir -> original symbol
 
     # -- write path ------------------------------------------------------------
     def append_bar(self, bar: Bar) -> None:
         """Sync, cheap: buffers the bar; the async flusher persists it."""
         sym = sanitize_symbol(bar.symbol)
+        self._names.setdefault(sym, bar.symbol)
         day = datetime.fromtimestamp(bar.time, tz=timezone.utc).strftime("%Y%m%d")
         key = (sym, day)
         buf = self._buffers.setdefault(key, [])
@@ -61,6 +64,9 @@ class CandleParquetStore:
     def flush(self) -> None:
         for key in list(self._dirty):
             self._write_day(key)
+            # the file now holds these bars (merge dedupes by time), so the
+            # buffer can go — otherwise every day ever seen stays in memory
+            self._buffers.pop(key, None)
         self._dirty.clear()
 
     def _day_path(self, key: tuple[str, str]) -> Path:
@@ -74,6 +80,9 @@ class CandleParquetStore:
             return
         path = self._day_path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
+        name_file = path.parent.parent / "symbol.txt"
+        if not name_file.exists() and sym in self._names:
+            name_file.write_text(self._names[sym], encoding="utf-8")
 
         df_new = pl.DataFrame(
             {
@@ -129,9 +138,16 @@ class CandleParquetStore:
         return bars
 
     def symbols(self) -> list[str]:
+        """Original symbol names of everything stored."""
         if not self.root.is_dir():
             return []
-        return sorted(p.name for p in self.root.iterdir() if p.is_dir())
+        out = []
+        for p in self.root.iterdir():
+            if not p.is_dir():
+                continue
+            name_file = p / "symbol.txt"
+            out.append(name_file.read_text(encoding="utf-8").strip() if name_file.exists() else p.name)
+        return sorted(out)
 
     def last_bars(self, symbol: str, n: int) -> list[Bar]:
         """Most recent n stored 1m bars (for chart seeding before the live window)."""

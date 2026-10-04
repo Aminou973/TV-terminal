@@ -94,3 +94,26 @@ def test_ws_rejects_bad_token(client):
     with pytest.raises(Exception):
         with client.websocket_connect("/api/stream?token=garbage"):
             pass
+
+def test_symbols_listed_once(client):
+    token = _register_and_token(client)
+    names = [s["symbol"] for s in client.get("/api/symbols", headers=_auth_headers(token)).json()]
+    assert "SIM-ES" not in names
+    assert len(names) == len(set(names))
+
+
+def test_ws_survives_bad_messages_and_streams_trades_and_book(client):
+    token = _register_and_token(client)
+    with client.websocket_connect(f"/api/stream?token={token}") as ws:
+        ws.send_text("not json")
+        ws.send_json(["not", "a", "dict"])
+        ws.send_json({"action": "subscribe_trades", "symbol": "SIM:ES"})
+        ws.send_json({"action": "subscribe_book", "symbol": "SIM:ES"})
+        ws.send_json({"action": "subscribe", "symbol": "SIM:ES", "tf": "5m"})
+        seen = set()
+        for _ in range(200):
+            msg = json.loads(ws.receive_text())
+            seen.add(msg["type"])
+            if {"trade", "book", "bar"} <= seen:
+                break
+        assert {"trade", "book", "bar"} <= seen

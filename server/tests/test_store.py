@@ -48,3 +48,10 @@ def test_store_replaces_duplicate_bar(tmp_path):
     back = store.read_1m("ES")
     assert len(back) == 1
     assert back[0].high == 105 and back[0].volume == 2
+
+def test_symbols_keep_original_names(tmp_path):
+    store = CandleParquetStore(tmp_path)
+    store.append_bar(Bar("SIM:ES", 1_800_000_000, 1, 1, 1, 1, 1))
+    store.flush()
+    assert store.symbols() == ["SIM:ES"]
+    assert store._buffers == {}, "flushed buffers must be released"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.candles.bus import EventBus
 from app.candles.aggregator import CandleAggregator, QuoteEvent
-from app.candles.resample import bucket_start_s, resample
+from app.candles.resample import resample
 from app.candles.sessions import market_class, session_day_start_s
 from app.models import Bar, BarEvent, Tick
 
@@ -23,22 +23,62 @@ def test_resample_5m_buckets():
     assert out[1].time == 300 and out[1].open == 12
 
 
-def test_bucket_start_daily_cme_anchors_at_17ct():
-    # Mon 2026-10-05 18:00 ET (23:00 UTC) belongs to Tuesday's session? No:
-    # CME day opens 17:00 CT (22:00 UTC Oct 4 is Sunday open for Monday's day).
-    # 2026-10-05 23:00 UTC = 16:00 CT Monday → still MONDAY's trading day (opened Sun 17:00 CT)
-    ts = 1770265200  # 2026-10-05T23:00:00Z
-    start = session_day_start_s(ts, "ES")
-    assert start <= ts
-    # the day window must contain the tick and be exactly 24h long in session terms
-    assert ts - start < 86400
+def test_cme_daily_rolls_at_17ct():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ct = ZoneInfo("America/Chicago")
+
+    def label(iso: str) -> str:
+        ts = int(datetime.fromisoformat(iso).replace(tzinfo=ct).timestamp())
+        return datetime.fromtimestamp(session_day_start_s(ts, "ES"), ct).date().isoformat()
+
+    assert label("2026-10-05T16:59") == "2026-10-05"  # Monday session, before the break
+    assert label("2026-10-05T17:00") == "2026-10-06"  # evening open → Tuesday's trading day
+    assert label("2026-10-05T23:30") == "2026-10-06"
+    assert label("2026-10-06T08:00") == "2026-10-06"
+
+
+def test_session_open_precedes_ticks():
+    from app.candles.sessions import session_open_s
+
+    ts = 1_791_239_400  # 2026-10-05 17:30 CT
+    assert session_open_s(ts, "ES") <= ts < session_open_s(ts, "ES") + 86400
 
 
 def test_market_classification():
     assert market_class("ES") == "cme"
     assert market_class("MES") == "cme"
+    assert market_class("SIM:ES") == "cme"
+    assert market_class("ES 12-25") == "cme"  # NinjaTrader contract naming
+    assert market_class("ESZ5") == "cme"
     assert market_class("BINANCE-BTCUSDT") == "crypto"
+    assert market_class("BINANCE-ETHUSDT") == "crypto"
+    assert market_class("NETH") == "stock"
+    assert market_class("NSE:RELIANCE") == "india"
     assert market_class("AAPL") == "stock"
+
+
+def test_live_tf_does_not_double_count_seeded_forming_bar():
+    from app.api.ws import LiveTfAggregator
+
+    agg = LiveTfAggregator("ES", "5m")
+    agg.seed([Bar("ES", 300, 1, 1, 1, 1, 4), Bar("ES", 360, 1, 1, 1, 1, 10)], now_s=400)
+    out = agg.on_event(BarEvent(Bar("ES", 360, 1, 2, 1, 2, 12), "1m", False))
+    assert out[-1][0].volume == 16  # 4 (closed) + 12 (forming), not 4 + 10 + 12
+
+
+def test_trade_events_carry_side():
+    from app.candles.aggregator import TradeEvent
+
+    bus = EventBus()
+    agg = CandleAggregator(bus, throttle_s=0.0)
+    q = bus.subscribe()
+    agg.process_tick(Tick("ES", 1_800_000_000_000, 100.0, 1))
+    agg.process_tick(Tick("ES", 1_800_000_000_500, 100.5, 2))
+    agg.process_tick(Tick("ES", 1_800_000_001_000, 100.25, 3, bid=100.25, ask=100.5))
+    trades = [e for e in _drain(q) if isinstance(e, TradeEvent)]
+    assert [t.side for t in trades] == ["", "buy", "sell"]
 
 
 # -------------------------------------------------------------- aggregator ----

@@ -16,6 +16,7 @@ class Tick:
     bid: float = 0.0
     ask: float = 0.0
     provider: str = ""
+    side: str = ""  # "buy" | "sell" | "" (aggressor side, when the feed knows it)
 
 
 @dataclass(slots=True)

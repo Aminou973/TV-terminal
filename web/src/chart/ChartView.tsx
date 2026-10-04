@@ -10,7 +10,7 @@ import {
   type LineWidth,
   type UTCTimestamp,
 } from 'lightweight-charts'
-import { getHistory } from '../api/client'
+import { getHistory, type BarData } from '../api/client'
 import { stream } from './stream'
 import { useTerminal } from '../store'
 
@@ -43,6 +43,8 @@ const CANDLE_OPTIONS = {
   wickUpColor: '#089981',
   wickDownColor: '#f23645',
 }
+
+const volColor = (b: BarData) => (b.close >= b.open ? '#26a69a80' : '#ef535080')
 
 export default function ChartView() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -91,19 +93,41 @@ export default function ChartView() {
     if (!candles || !volume || !chart) return
 
     let stale = false
+    // Live bars that arrive before history loads are queued, then replayed;
+    // anything older than the last drawn bar is dropped (LWC rejects it).
+    let loaded = false
+    let lastTime = -Infinity
+    const pending: BarData[] = []
+
+    const draw = (b: BarData) => {
+      if (b.time < lastTime) return
+      lastTime = b.time
+      candles.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
+      volume.update({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b) })
+    }
+
+    // clear the previous symbol/tf so its bars never mix with the new ones
+    candles.setData([])
+    volume.setData([])
+
     getHistory(symbol, tf)
       .then(({ bars }) => {
         if (stale) return
         candles.setData(bars.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })))
-        volume.setData(bars.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: b.close >= b.open ? '#26a69a80' : '#ef535080' })))
+        volume.setData(bars.map((b) => ({ time: b.time as UTCTimestamp, value: b.volume, color: volColor(b) })))
+        lastTime = bars.length ? bars[bars.length - 1].time : -Infinity
         chart.timeScale().fitContent()
       })
       .catch((err) => console.error('history load failed:', err))
+      .finally(() => {
+        if (stale) return
+        loaded = true
+        pending.splice(0).forEach(draw)
+      })
 
     const off = stream.subscribeBars(symbol, tf, (msg) => {
-      const b = msg.bar
-      candles.update({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })
-      volume.update({ time: b.time as UTCTimestamp, value: b.volume, color: b.close >= b.open ? '#26a69a80' : '#ef535080' })
+      if (loaded) draw(msg.bar)
+      else pending.push(msg.bar)
     })
 
     return () => {

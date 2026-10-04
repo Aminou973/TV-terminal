@@ -30,6 +30,61 @@ class QuoteEvent:
         }
 
 
+class TradeEvent:
+    """One print, for the recent-trades panel (unthrottled)."""
+
+    __slots__ = ("symbol", "price", "size", "side", "ts_ms")
+
+    def __init__(self, symbol: str, price: float, size: float, side: str, ts_ms: int):
+        self.symbol = symbol
+        self.price = price
+        self.size = size
+        self.side = side
+        self.ts_ms = ts_ms
+
+    def to_ws(self) -> dict:
+        return {
+            "type": "trade",
+            "symbol": self.symbol,
+            "price": self.price,
+            "size": self.size,
+            "side": self.side,
+            "ts_ms": self.ts_ms,
+        }
+
+
+class BookEvent:
+    """Order-book snapshot: bids high→low, asks low→high, as [price, size]."""
+
+    __slots__ = ("symbol", "bids", "asks", "ts_ms")
+
+    def __init__(self, symbol: str, bids: list[list[float]], asks: list[list[float]], ts_ms: int):
+        self.symbol = symbol
+        self.bids = bids
+        self.asks = asks
+        self.ts_ms = ts_ms
+
+    def to_ws(self) -> dict:
+        return {"type": "book", "symbol": self.symbol, "bids": self.bids, "asks": self.asks, "ts_ms": self.ts_ms}
+
+
+def infer_side(tick: Tick, prev: Optional[Tick]) -> str:
+    """Aggressor side: feed-provided, else quote rule, else tick rule."""
+    if tick.side in ("buy", "sell"):
+        return tick.side
+    if tick.bid and tick.ask:
+        if tick.price >= tick.ask:
+            return "buy"
+        if tick.price <= tick.bid:
+            return "sell"
+    if prev is not None:
+        if tick.price > prev.price:
+            return "buy"
+        if tick.price < prev.price:
+            return "sell"
+    return ""
+
+
 class CandleAggregator:
     """Builds live 1m candles from ticks and publishes bar/quote events.
 
@@ -74,7 +129,9 @@ class CandleAggregator:
         bar.close = tick.price
         bar.volume += tick.size
 
+        side = infer_side(tick, self.last_tick.get(symbol))
         self.last_tick[symbol] = tick
+        self.bus.publish(TradeEvent(symbol, tick.price, tick.size, side, tick.ts_ms))
         self._maybe_push_forming(bar, tick.provider)
         self._maybe_push_quote(tick)
 
