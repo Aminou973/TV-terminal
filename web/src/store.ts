@@ -46,15 +46,67 @@ export const useAuth = create<AuthState>((set) => ({
 }))
 
 // ---------------------------------------------------------------- terminal ---
-export const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1D', '1W', '1M'] as const
-export type Tf = (typeof TFS)[number]
+/** Interval id: Nm (1–1440), Nh (1–24), 1D, 1W, 1M — the server accepts any of these. */
+export type Tf = string
 
-export const TF_SECONDS: Record<Tf, number> = {
-  '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600, '2h': 7200, '4h': 14400,
-  '1D': 86400, '1W': 604800, '1M': 2592000,
+export const TFS: Tf[] = ['1m', '2m', '3m', '5m', '10m', '15m', '30m', '45m', '1h', '2h', '3h', '4h', '1D', '1W', '1M']
+const DEFAULT_FAV_TFS: Tf[] = ['1m', '5m', '15m', '1h', '4h', '1D', '1W']
+
+export function tfSeconds(tf: Tf): number | null {
+  const m = /^(\d{1,4})(m|h)$|^1(D|W|M)$/.exec(tf)
+  if (!m) return null
+  if (m[3]) return { D: 86400, W: 604800, M: 2592000 }[m[3]]!
+  const n = Number(m[1])
+  if (n < 1 || (m[2] === 'm' && n > 1440) || (m[2] === 'h' && n > 24)) return null
+  return n * (m[2] === 'm' ? 60 : 3600)
 }
 
-export type ChartType = 'candles' | 'hollow' | 'bars' | 'heikin' | 'line' | 'area' | 'baseline'
+/** Parse what a user types ("5", "90", "4h", "d", "1W") into an interval id. */
+export function parseTf(input: string): Tf | null {
+  const s = input.trim()
+  if (/^\d+$/.test(s)) {
+    const n = Number(s)
+    if (n >= 60 && n % 60 === 0 && n / 60 <= 24) return `${n / 60}h`
+    return tfSeconds(`${n}m`) ? `${n}m` : null
+  }
+  const m = /^(\d*)\s*([mhdwMHDW])$/.exec(s)
+  if (!m) return null
+  const n = m[1] ? Number(m[1]) : 1
+  const u = m[2]
+  if (u === 'm') return tfSeconds(`${n}m`) ? `${n}m` : null
+  if (u === 'h' || u === 'H') return tfSeconds(`${n}h`) ? `${n}h` : null
+  if (n !== 1) return null
+  return u.toUpperCase() === 'D' ? '1D' : u.toUpperCase() === 'W' ? '1W' : u === 'M' ? '1M' : null
+}
+
+export type ChartType =
+  | 'candles' | 'hollow' | 'bars' | 'heikin' | 'line' | 'area' | 'baseline' | 'columns'
+  | 'renko' | 'range' | 'linebreak' | 'kagi' | 'pnf'
+
+export interface ChartSettings {
+  scale: 'normal' | 'log' | 'percent' | 'indexed'
+  invert: boolean
+  upColor: string
+  downColor: string
+  grid: boolean
+  volume: boolean
+  /** 'exchange' (the symbol's market), 'local', 'UTC' or an IANA zone */
+  timezone: string
+  countdown: boolean
+  prevClose: boolean
+  sessionBreaks: boolean
+  /** box size for Renko / Range / Kagi / P&F; 0 = auto (ATR) */
+  box: number
+  reversal: number
+  lineBreak: number
+}
+
+export const DEFAULT_SETTINGS: ChartSettings = {
+  scale: 'normal', invert: false, upColor: '#089981', downColor: '#f23645', grid: true, volume: true,
+  timezone: 'exchange', countdown: true, prevClose: false, sessionBreaks: false, box: 0, reversal: 3, lineBreak: 3,
+}
+
+export const paneSettings = (p: PaneState): ChartSettings => ({ ...DEFAULT_SETTINGS, ...p.settings })
 
 export interface IndicatorInst {
   uid: string
@@ -70,6 +122,9 @@ export interface PaneState {
   tf: Tf
   chartType: ChartType
   indicators: IndicatorInst[]
+  settings?: Partial<ChartSettings>
+  /** symbols overlaid in % change on this chart */
+  compares?: string[]
 }
 
 export type Grid = '1' | '2h' | '2v' | '3' | '4'
@@ -82,7 +137,7 @@ export interface LayoutSpec {
   syncCrosshair: boolean
 }
 
-export type RightTab = 'watchlist' | 'depth' | 'alerts' | 'details'
+export type RightTab = 'watchlist' | 'depth' | 'alerts' | 'details' | 'objects' | 'data'
 export type BottomTab = 'editor' | 'tester' | 'screener' | 'trading'
 
 export interface ReplayState {
@@ -117,6 +172,8 @@ interface TerminalState extends LayoutSpec {
   stayInDrawing: boolean
   drawingsHidden: boolean
   replay: ReplayState | null
+  favTools: string[]
+  favTfs: Tf[]
 
   setActive: (i: number) => void
   setGrid: (g: Grid) => void
@@ -137,6 +194,11 @@ interface TerminalState extends LayoutSpec {
   setDrawingsHidden: (v: boolean) => void
   setSync: (patch: Partial<Pick<LayoutSpec, 'syncSymbol' | 'syncCrosshair'>>) => void
   setReplay: (r: ReplayState | null) => void
+  setSettings: (patch: Partial<ChartSettings>) => void
+  addCompare: (symbol: string) => void
+  removeCompare: (symbol: string) => void
+  toggleFavTool: (kind: string) => void
+  toggleFavTf: (tf: Tf) => void
 }
 
 const saved = load<Partial<TerminalState>>('ot_terminal', {})
@@ -152,6 +214,8 @@ export const useTerminal = create<TerminalState>((set, get) => ({
   magnet: 'off',
   stayInDrawing: false,
   drawingsHidden: false,
+  favTools: ['trend-line', 'horizontal-line', 'fib-retracement', 'rectangle', 'long-position', 'text'],
+  favTfs: DEFAULT_FAV_TFS,
   ...saved,
   replay: null,
 
@@ -194,6 +258,28 @@ export const useTerminal = create<TerminalState>((set, get) => ({
   setDrawingsHidden: (drawingsHidden) => set({ drawingsHidden }),
   setSync: (patch) => set(patch),
   setReplay: (replay) => set({ replay }),
+  setSettings: (patch) => {
+    const p = get().panes[get().active]
+    get().updatePane(get().active, { settings: { ...p.settings, ...patch } })
+  },
+  addCompare: (symbol) => {
+    const p = get().panes[get().active]
+    const cur = p.compares ?? []
+    if (!cur.includes(symbol) && symbol !== p.symbol) get().updatePane(get().active, { compares: [...cur, symbol] })
+  },
+  removeCompare: (symbol) => {
+    const p = get().panes[get().active]
+    get().updatePane(get().active, { compares: (p.compares ?? []).filter((s) => s !== symbol) })
+  },
+  toggleFavTool: (kind) => {
+    const f = get().favTools
+    set({ favTools: f.includes(kind) ? f.filter((k) => k !== kind) : [...f, kind] })
+  },
+  toggleFavTf: (tf) => {
+    const f = get().favTfs
+    const next = f.includes(tf) ? f.filter((t) => t !== tf) : [...f, tf]
+    set({ favTfs: next.sort((a, b) => (tfSeconds(a) ?? 0) - (tfSeconds(b) ?? 0)) })
+  },
 }))
 
 export function layoutSpec(s: TerminalState = useTerminal.getState()): LayoutSpec {
@@ -202,8 +288,8 @@ export function layoutSpec(s: TerminalState = useTerminal.getState()): LayoutSpe
 
 // remember UI state per viewer
 useTerminal.subscribe((s) => {
-  const { grid, panes, syncSymbol, syncCrosshair, layoutName, active, theme, rightTab, bottomTab, magnet, stayInDrawing } = s
-  persist('ot_terminal', { grid, panes, syncSymbol, syncCrosshair, layoutName, active, theme, rightTab, bottomTab, magnet, stayInDrawing })
+  const { grid, panes, syncSymbol, syncCrosshair, layoutName, active, theme, rightTab, bottomTab, magnet, stayInDrawing, favTools, favTfs } = s
+  persist('ot_terminal', { grid, panes, syncSymbol, syncCrosshair, layoutName, active, theme, rightTab, bottomTab, magnet, stayInDrawing, favTools, favTfs })
 })
 
 export const newUid = uid
@@ -216,6 +302,9 @@ export type Dialog =
   | { kind: 'alert'; symbol: string; price: number }
   | { kind: 'layouts' }
   | { kind: 'order'; symbol: string; side: 'buy' | 'sell'; price?: number }
+  | { kind: 'chartSettings' }
+  | { kind: 'compare' }
+  | { kind: 'drawingSettings'; paneId: string; drawingId: string }
 
 interface UiState {
   dialog: Dialog | null
@@ -227,4 +316,20 @@ export const useUi = create<UiState>((set) => ({
   dialog: null,
   open: (dialog) => set({ dialog }),
   close: () => set({ dialog: null }),
+}))
+
+// ------------------------------------------------------------- crosshair ----
+// What the active chart's crosshair points at, for the data window.
+export interface CrosshairInfo {
+  symbol: string
+  tf: Tf
+  bar: { time: number; open: number; high: number; low: number; close: number; volume: number } | null
+  change: number | null
+  changePct: number | null
+  rows: { label: string; color: string; value: number | null }[]
+}
+
+export const useCrosshair = create<{ info: CrosshairInfo | null; set: (i: CrosshairInfo) => void }>((set) => ({
+  info: null,
+  set: (info) => set({ info }),
 }))

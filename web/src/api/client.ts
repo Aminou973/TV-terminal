@@ -207,6 +207,17 @@ export const saveScript = (name: string, kind: Script['kind'], source: string) =
   api<Script>('/scripts', json('PUT', { name, kind, source }))
 export const deleteScript = (id: number) => api(`/scripts/${id}`, json('DELETE'))
 
+export interface Template<S = unknown> {
+  id: number
+  kind: 'indicators' | 'chart' | 'drawing'
+  name: string
+  spec: S
+}
+export const getTemplates = <S>(kind: Template['kind']) => api<Template<S>[]>(`/templates?kind=${kind}`)
+export const saveTemplate = <S>(kind: Template['kind'], name: string, spec: S) =>
+  api<Template<S>>('/templates', json('PUT', { kind, name, spec }))
+export const deleteTemplate = (id: number) => api(`/templates/${id}`, json('DELETE'))
+
 // ---------------------------------------------------------------- alerts ----
 export const getAlerts = () => api<Alert[]>('/alerts')
 export const createAlert = (a: { symbol: string; condition: AlertCondition; price: number; message?: string; once?: boolean }) =>

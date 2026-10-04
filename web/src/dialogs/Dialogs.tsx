@@ -1,29 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createAlert, deleteLayout, getLayouts, getQuote, saveLayout, type AlertCondition, type Layout } from '../api/client'
 import { loadRegistry, type IndicatorDef, type InputSpec } from '../chart/indicators'
 import { resolveIndicator } from '../chart/catalog'
 import { toast, useAlerts, useScripts, useSymbols } from '../data'
 import { OrderTicket } from '../panels/TradingPanel'
+import { ChartSettingsDialog, CompareDialog, DrawingSettingsDialog, IndicatorTemplates } from './ChartDialogs'
+import { Modal } from './Modal'
 import { DEFAULT_LAYOUT, layoutSpec, useTerminal, useUi, type LayoutSpec } from '../store'
-
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-  return (
-    <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
-        <div className="modal-head">
-          <span>{title}</span>
-          <button onClick={onClose} aria-label="Close">×</button>
-        </div>
-        <div className="modal-body">{children}</div>
-      </div>
-    </div>
-  )
-}
 
 // ------------------------------------------------------------- symbol ------
 function SymbolSearch({ onClose }: { onClose: () => void }) {
@@ -82,7 +65,7 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
   const [all, setAll] = useState<IndicatorDef[] | null>(null)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('Favorites')
-  const [group, setGroup] = useState<'built-in' | 'community' | 'scripts'>('built-in')
+  const [group, setGroup] = useState<'built-in' | 'community' | 'scripts' | 'templates'>('built-in')
 
   useEffect(() => {
     loadRegistry().then(setAll).catch((e) => toast('Indicators failed to load', String(e.message), 'error'))
@@ -119,11 +102,15 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
             <button className={group === 'built-in' ? 'on' : ''} onClick={() => setGroup('built-in')}>Technicals</button>
             <button className={group === 'community' ? 'on' : ''} onClick={() => setGroup('community')}>Community</button>
             <button className={group === 'scripts' ? 'on' : ''} onClick={() => setGroup('scripts')}>My scripts</button>
+            <button className={group === 'templates' ? 'on' : ''} onClick={() => setGroup('templates')}>Templates</button>
           </div>
-          {group !== 'scripts' && cats.map((c) => (
+          {group !== 'scripts' && group !== 'templates' && cats.map((c) => (
             <button key={c} className={`cat ${c === cat ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>
           ))}
         </div>
+        {group === 'templates' ? (
+          <IndicatorTemplates onApplied={onClose} />
+        ) : (
         <div className="pick-list">
           {!all && <p className="muted pad">Loading the indicator library…</p>}
           {group === 'scripts'
@@ -141,6 +128,7 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
               ))}
           {group === 'scripts' && scripts.length === 0 && <p className="muted pad">Write one in the editor (bottom panel) and save it.</p>}
         </div>
+        )}
       </div>
     </Modal>
   )
@@ -319,6 +307,12 @@ export default function Dialogs() {
       return <AlertDialog symbol={dialog.symbol} price={dialog.price} onClose={close} />
     case 'layouts':
       return <LayoutsDialog onClose={close} />
+    case 'chartSettings':
+      return <ChartSettingsDialog onClose={close} />
+    case 'compare':
+      return <CompareDialog onClose={close} />
+    case 'drawingSettings':
+      return <DrawingSettingsDialog paneId={dialog.paneId} drawingId={dialog.drawingId} onClose={close} />
     case 'order':
       return (
         <Modal title={`${dialog.side === 'buy' ? 'Buy' : 'Sell'} ${dialog.symbol}`} onClose={close}>

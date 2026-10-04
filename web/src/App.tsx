@@ -8,10 +8,26 @@ import { requestNotifications, useAlerts, usePaper, useScripts, useSymbols, useT
 import { Icon } from './icons'
 import AlertsPanel from './panels/AlertsPanel'
 import Depth from './panels/Depth'
+import DataWindow from './panels/DataWindow'
 import Details from './panels/Details'
+import ObjectTree from './panels/ObjectTree'
 import TradingPanel from './panels/TradingPanel'
 import Watchlist from './panels/Watchlist'
-import { GRID_PANES, useAuth, useTerminal, useUi, type BottomTab, type RightTab } from './store'
+import { getPane } from './chart/registry'
+import { GRID_PANES, parseTf, useAuth, useTerminal, useUi, type BottomTab, type RightTab } from './store'
+
+// Alt+<key> drawing hotkeys (TradingView's defaults where it has them)
+const TOOL_KEYS: Record<string, string> = {
+  KeyT: 'trend-line',
+  KeyH: 'horizontal-line',
+  KeyJ: 'horizontal-ray',
+  KeyV: 'vertical-line',
+  KeyC: 'cross-line',
+  KeyF: 'fib-retracement',
+  KeyB: 'rectangle',
+  KeyP: 'long-position',
+  KeyN: 'text',
+}
 
 // heavy, rarely-open panels load on first use (CodeMirror, equity chart)
 const ScriptEditor = lazy(() => import('./panels/ScriptEditor'))
@@ -23,6 +39,8 @@ const RIGHT_TABS: { id: RightTab; title: string; icon: () => ReactNode }[] = [
   { id: 'depth', title: 'Order book & trades', icon: Icon.depth },
   { id: 'alerts', title: 'Alerts', icon: Icon.alert },
   { id: 'details', title: 'Symbol details', icon: Icon.info },
+  { id: 'objects', title: 'Object tree', icon: Icon.tree },
+  { id: 'data', title: 'Data window', icon: Icon.table },
 ]
 
 const BOTTOM_TABS: { id: BottomTab; title: string; icon: () => ReactNode }[] = [
@@ -105,6 +123,8 @@ function RightPanel() {
           {tab === 'depth' && <Depth />}
           {tab === 'alerts' && <AlertsPanel />}
           {tab === 'details' && <Details />}
+          {tab === 'objects' && <ObjectTree />}
+          {tab === 'data' && <DataWindow />}
         </aside>
       )}
       <nav className="rail">
@@ -155,14 +175,52 @@ function Terminal() {
     }
   }, [])
 
-  // keyboard: "/" symbol search, Alt+A alert, Alt+I indicators
+  // quick interval box: type "15" / "4h" / "D" anywhere on the terminal, Enter applies
+  const [quickTf, setQuickTf] = useState<string | null>(null)
+  const quickRef = useRef<string | null>(null)
+  quickRef.current = quickTf
+
+  // keyboard: "/" symbol search, Alt+A alert, Alt+I indicators, Alt+<key> tools …
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement
       if (el.closest('input, textarea, select, .cm-editor')) return
       const ui = useUi.getState()
-      const pane = useTerminal.getState().panes[useTerminal.getState().active]
-      if (e.key === '/' && !ui.dialog) {
+      const st = useTerminal.getState()
+      const pane = st.panes[st.active]
+      const q = quickRef.current
+      if (q !== null) {
+        e.preventDefault()
+        if (e.key === 'Escape') setQuickTf(null)
+        else if (e.key === 'Backspace') setQuickTf(q.length > 1 ? q.slice(0, -1) : null)
+        else if (e.key === 'Enter') {
+          const tf = parseTf(q)
+          if (tf) st.setTf(tf)
+          setQuickTf(null)
+        } else if (/^[0-9mhdwMHDW]$/.test(e.key) && q.length < 5) setQuickTf(q + e.key)
+        return
+      }
+      if (ui.dialog) return
+      const mod = e.ctrlKey || e.metaKey
+      if (/^[0-9]$/.test(e.key) && !mod && !e.altKey) {
+        e.preventDefault()
+        setQuickTf(e.key)
+      } else if (mod && e.code === 'KeyZ' && !e.shiftKey) {
+        e.preventDefault()
+        getPane(pane.id)?.undo()
+      } else if (mod && (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey))) {
+        e.preventDefault()
+        getPane(pane.id)?.redo()
+      } else if (e.altKey && e.code === 'KeyR') {
+        e.preventDefault()
+        getPane(pane.id)?.resetView()
+      } else if (e.altKey && e.code === 'KeyS') {
+        e.preventDefault()
+        void getPane(pane.id)?.snapshot()
+      } else if (e.altKey && TOOL_KEYS[e.code]) {
+        e.preventDefault()
+        st.setDrawingTool(st.drawingTool === TOOL_KEYS[e.code] ? null : TOOL_KEYS[e.code])
+      } else if (e.key === '/') {
         e.preventDefault()
         ui.open({ kind: 'symbol' })
       } else if (e.altKey && e.code === 'KeyA') {
@@ -190,6 +248,13 @@ function Terminal() {
       </div>
       <Dialogs />
       <Toasts />
+      {quickTf !== null && (
+        <div className="quick-tf" role="dialog" aria-label="Change interval">
+          <span className="muted small">Change interval</span>
+          <b>{quickTf}</b>
+          <span className={`small ${parseTf(quickTf) ? '' : 'down'}`}>{parseTf(quickTf) ?? 'not a valid interval'} · Enter</span>
+        </div>
+      )}
     </div>
   )
 }

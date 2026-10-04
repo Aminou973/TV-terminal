@@ -14,3 +14,40 @@ export function symbolRoot(symbol: string): string {
 export const pointValue = (symbol: string) => POINT_VALUE[symbolRoot(symbol)] ?? 1
 
 export const priceDigits = (v: number) => (Math.abs(v) < 1 ? 5 : Math.abs(v) < 10 ? 4 : 2)
+
+// --------------------------------------------------------- time zones ------
+export type Market = 'cme' | 'crypto' | 'india' | 'stock' | string
+
+const EXCHANGE_TZ: Record<string, string> = {
+  cme: 'America/Chicago',
+  stock: 'America/New_York',
+  india: 'Asia/Kolkata',
+  crypto: 'UTC',
+}
+
+/** Resolve a chart timezone setting to an IANA zone (undefined = browser local). */
+export function resolveTz(setting: string, market: Market | undefined): string | undefined {
+  if (setting === 'local') return undefined
+  if (setting === 'exchange') return EXCHANGE_TZ[market ?? 'stock'] ?? 'America/New_York'
+  return setting
+}
+
+const fmtCache = new Map<string, Intl.DateTimeFormat>()
+function fmt(tz: string | undefined, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${tz}|${JSON.stringify(opts)}`
+  let f = fmtCache.get(key)
+  if (!f) {
+    f = new Intl.DateTimeFormat(undefined, { ...opts, timeZone: tz })
+    fmtCache.set(key, f)
+  }
+  return f
+}
+
+export const formatTime = (sec: number, tz: string | undefined, opts: Intl.DateTimeFormatOptions) =>
+  fmt(tz, opts).format(new Date(sec * 1000))
+
+/** Calendar day (YYYY-MM-DD) of a time in a zone; CME rolls at 17:00 Chicago. */
+export function sessionKey(sec: number, market: Market | undefined): string {
+  const shifted = market === 'cme' ? sec + 7 * 3600 : sec
+  return fmt(resolveTz('exchange', market), { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(shifted * 1000))
+}

@@ -6,23 +6,53 @@ session-anchored (see sessions.py) so CME dailies match TradingView.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
+
 from app.candles.sessions import session_day_start_s, session_period_start_s
 from app.models import Bar
 
-# tf id -> seconds (intraday); "1D" handled via session anchoring
-TF_SECONDS: dict[str, int] = {
-    "1m": 60,
-    "3m": 180,
-    "5m": 300,
-    "15m": 900,
-    "30m": 1800,
-    "1h": 3600,
-    "2h": 7200,
-    "4h": 14400,
-    "1D": 86400,
-    "1W": 604800,
-    "1M": 2678400,  # nominal (31d) — only used to size history reads
-}
+_TF = re.compile(r"^(\d{1,4})(m|h)$|^(1)(D|W|M)$")
+_UNIT = {"m": 60, "h": 3600, "D": 86400, "W": 604800, "M": 2678400}  # M nominal (31d), for sizing reads
+
+
+def tf_seconds(tf: str) -> int | None:
+    """Seconds for an interval id: Nm (1-1440), Nh (1-24), 1D, 1W, 1M; None if invalid."""
+    m = _TF.match(tf or "")
+    if not m:
+        return None
+    n = int(m.group(1) or m.group(3))
+    unit = m.group(2) or m.group(4)
+    if n < 1 or (unit == "m" and n > 1440) or (unit == "h" and n > 24):
+        return None
+    return n * _UNIT[unit]
+
+
+class _TfSeconds(Mapping):
+    """Read-only mapping view over tf_seconds(): `tf in TF_SECONDS`, `TF_SECONDS[tf]`.
+
+    Any custom interval (7m, 90m, 3h …) is valid; iteration lists the common ones.
+    """
+
+    COMMON = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1D", "1W", "1M")
+
+    def __getitem__(self, tf: str) -> int:
+        secs = tf_seconds(tf) if isinstance(tf, str) else None
+        if secs is None:
+            raise KeyError(tf)
+        return secs
+
+    def __contains__(self, tf: object) -> bool:
+        return isinstance(tf, str) and tf_seconds(tf) is not None
+
+    def __iter__(self):
+        return iter(self.COMMON)
+
+    def __len__(self) -> int:
+        return len(self.COMMON)
+
+
+TF_SECONDS = _TfSeconds()
 
 
 def bucket_start_s(ts_s: int, tf: str, symbol: str) -> int:
@@ -31,6 +61,8 @@ def bucket_start_s(ts_s: int, tf: str, symbol: str) -> int:
     if tf in ("1W", "1M"):
         return session_period_start_s(ts_s, symbol, tf[1])
     secs = TF_SECONDS[tf]
+    if secs >= 86400:  # 1D handled above; a multi-hour bucket longer than a day isn't offered
+        return session_day_start_s(ts_s, symbol)
     return (ts_s // secs) * secs
 
 

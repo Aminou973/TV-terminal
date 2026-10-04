@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     avg_price    REAL NOT NULL,
     PRIMARY KEY (user_id, symbol)
 );
+CREATE TABLE IF NOT EXISTS templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,          -- indicators | chart | drawing
+    name        TEXT NOT NULL,
+    spec        TEXT NOT NULL,
+    UNIQUE(user_id, kind, name)
+);
 CREATE TABLE IF NOT EXISTS kv (
     key    TEXT PRIMARY KEY,
     value  TEXT NOT NULL

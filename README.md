@@ -8,9 +8,10 @@ A self-hosted, open-source TradingView-style trading terminal. CME futures from 
 
 | | |
 |---|---|
-| **Charts** | Candles, hollow, Heikin Ashi, bars, line, area, baseline · 1m 3m 5m 15m 30m 1h 2h 4h 1D 1W 1M (session-aware dailies) · 1/2/3/4-chart layouts with symbol + crosshair sync · infinite history scroll · light/dark |
-| **Drawings** | 86 TradingView tools — trend lines, channels, pitchforks, Fibonacci, Gann, harmonic & Elliott patterns, long/short position, measures, volume profiles, anchored VWAP, shapes, text — saved per symbol |
-| **Indicators** | 876 built-in (95 standard, 736 community, 45 candlestick patterns) with own panes, live legend values and settings |
+| **Charts** | Candles, hollow, Heikin Ashi, bars, columns, line, area, baseline · price-based Renko, Range, Line break, Kagi, Point & Figure · any interval (1m–1440m, 1–24h, 1D/1W/1M, e.g. 7m, 90m, 3h) with favourites · 1/2/3/4-chart layouts with symbol + crosshair sync · infinite history scroll · light/dark |
+| **Chart settings** | Regular / log / percent / indexed scales, invert, colours, grid, volume, time zone, countdown to bar close, previous-close line, session breaks · compare symbols (% overlay) and spreads (`ES - NQ`, `2 * GC / SI`) · snapshots (PNG download + clipboard) |
+| **Drawings** | 86 TradingView tools — trend lines, channels, pitchforks, Fibonacci, Gann, harmonic & Elliott patterns, long/short position, measures, volume profiles, anchored VWAP, shapes, text — saved per symbol · right-click menus, style editor (colour, width, dash, fill, text, extend, labels) with style templates, object tree, undo/redo, favourite-tools bar |
+| **Indicators** | 876 built-in (95 standard, 736 community, 45 candlestick patterns) with own panes, live legend values, settings, data window and saved indicator templates |
 | **OpenScript** | Write your own indicators and strategies in JavaScript (Pine-style `ta.*`, `plot`, `input`, `strategy.*`), sandboxed in a Web Worker, CodeMirror editor with templates |
 | **Strategy tester** | Next-bar-open fills, stop-loss / take-profit, commission, futures point values; net profit, win rate, profit factor, drawdown, Sharpe, equity curve, trade list |
 | **Bar replay** | Pick a bar, then play / step forward at 1–10× with indicators recalculated as bars arrive |
@@ -68,6 +69,19 @@ npm run dev                                                   # → http://local
 Register on the sign-in screen (**No account? Register**) — the first account becomes the admin. The tick simulator (`SIM:ES`) streams immediately; yfinance and Binance stream when the machine can reach them.
 
 Tests: `cd server && pytest` · `cd web && npm test`.
+
+### Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `/` | Symbol search (type `A - B` for a spread) |
+| digits, e.g. `45`, `4h`, `d` + Enter | Change interval |
+| Alt+T / H / J / V / C / F / B / P / N | Trend line / horizontal line / horizontal ray / vertical line / cross line / Fib retracement / rectangle / long position / text |
+| Ctrl+Z / Ctrl+Y | Undo / redo drawings |
+| Alt+R · Alt+S | Reset chart view · snapshot |
+| Alt+A · Alt+I | New alert · indicators |
+| Esc · Del | Cancel tool · delete selected drawing |
+| Right-click | Chart or drawing context menu |
 
 ## Data sources
 

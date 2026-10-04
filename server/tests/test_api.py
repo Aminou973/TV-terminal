@@ -74,7 +74,7 @@ def test_history_resamples_5m(client):
 
 def test_history_rejects_bad_tf(client):
     token = _register_and_token(client)
-    r = client.get("/api/history", params={"symbol": "SIM:ES", "tf": "7m"}, headers=_auth_headers(token))
+    r = client.get("/api/history", params={"symbol": "SIM:ES", "tf": "7x"}, headers=_auth_headers(token))
     assert r.status_code == 400
 
 
@@ -171,3 +171,13 @@ def test_ninja_routing_is_off_by_default(client):
     assert st["enabled"] is False and st["connected"] is False
     r = client.post("/api/broker/ninja/orders", json={"symbol": "ES", "side": "buy", "qty": 1}, headers=h)
     assert r.status_code in (400, 403)
+
+
+def test_templates(client):
+    h = _auth_headers(_register_and_token(client))
+    t = client.put("/api/templates", json={"kind": "indicators", "name": "Scalp", "spec": [{"id": "rsi"}]}, headers=h)
+    assert t.status_code == 200 and t.json()["spec"] == [{"id": "rsi"}]
+    assert [x["name"] for x in client.get("/api/templates?kind=indicators", headers=h).json()] == ["Scalp"]
+    assert client.get("/api/templates?kind=chart", headers=h).json() == []
+    client.delete(f"/api/templates/{t.json()['id']}", headers=h)
+    assert client.get("/api/templates?kind=indicators", headers=h).json() == []
