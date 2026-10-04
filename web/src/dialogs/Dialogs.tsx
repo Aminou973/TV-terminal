@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createAlert, deleteLayout, getLayouts, getQuote, saveLayout, type AlertCondition, type Layout } from '../api/client'
+import { useEffect, useMemo, useState } from 'react'
+import { deleteLayout, getLayouts, saveLayout, type Layout } from '../api/client'
 import { loadRegistry, type IndicatorDef, type InputSpec } from '../chart/indicators'
 import { resolveIndicator } from '../chart/catalog'
-import { toast, useAlerts, useScripts, useSymbols } from '../data'
+import { toast, useScripts, useSymbols } from '../data'
 import { OrderTicket } from '../panels/TradingPanel'
 import { ChartSettingsDialog, CompareDialog, DrawingSettingsDialog, IndicatorTemplates } from './ChartDialogs'
+import AlertDialog from './AlertDialog'
 import { Modal } from './Modal'
+import NotifySettingsDialog from './NotifySettingsDialog'
 import { DEFAULT_LAYOUT, layoutSpec, useTerminal, useUi, type LayoutSpec } from '../store'
 
 // ------------------------------------------------------------- symbol ------
@@ -187,66 +189,6 @@ function IndicatorSettings({ uid, onClose }: { uid: string; onClose: () => void 
   )
 }
 
-// --------------------------------------------------------------- alert -----
-function AlertDialog({ symbol, price, onClose }: { symbol: string; price: number; onClose: () => void }) {
-  const [sym, setSym] = useState(symbol)
-  const [cond, setCond] = useState<AlertCondition>('crossing')
-  const [level, setLevel] = useState(Number.isFinite(price) ? String(price) : '')
-  const [message, setMessage] = useState('')
-  const [once, setOnce] = useState(true)
-  const touched = useRef(false)
-
-  useEffect(() => {
-    if (Number.isFinite(price)) return
-    getQuote([symbol]).then(({ quotes }) => {
-      if (!touched.current && quotes[0]) setLevel(String(quotes[0].last))
-    }).catch(() => {})
-  }, [symbol, price])
-
-  const submit = async () => {
-    try {
-      await createAlert({ symbol: sym, condition: cond, price: Number(level), message, once })
-      await useAlerts.getState().refresh()
-      toast('Alert created', `${sym} ${cond.replace('_', ' ')} ${level}`, 'success')
-      onClose()
-    } catch (e) {
-      toast('Alert failed', String((e as Error).message), 'error')
-    }
-  }
-
-  return (
-    <Modal title="Create alert" onClose={onClose}>
-      <div className="form">
-        <label><span>Symbol</span><input value={sym} onChange={(e) => setSym(e.target.value)} /></label>
-        <label>
-          <span>Condition</span>
-          <select value={cond} onChange={(e) => setCond(e.target.value as AlertCondition)}>
-            <option value="crossing">Crossing</option>
-            <option value="crossing_up">Crossing up</option>
-            <option value="crossing_down">Crossing down</option>
-            <option value="greater">Greater than</option>
-            <option value="less">Less than</option>
-          </select>
-        </label>
-        <label><span>Price</span><input type="number" step="any" value={level} onChange={(e) => { touched.current = true; setLevel(e.target.value) }} /></label>
-        <label><span>Message</span><input placeholder="optional" value={message} onChange={(e) => setMessage(e.target.value)} /></label>
-        <label><span>Trigger</span>
-          <select value={once ? 'once' : 'every'} onChange={(e) => setOnce(e.target.value === 'once')}>
-            <option value="once">Only once</option>
-            <option value="every">Every time</option>
-          </select>
-        </label>
-      </div>
-      <div className="modal-foot">
-        <span className="muted small">Evaluated on the server on every tick; also shows as a browser notification.</span>
-        <span className="spacer" />
-        <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={!sym || !level} onClick={submit}>Create</button>
-      </div>
-    </Modal>
-  )
-}
-
 // ------------------------------------------------------------- layouts -----
 function LayoutsDialog({ onClose }: { onClose: () => void }) {
   const current = useTerminal((s) => s.layoutName)
@@ -304,7 +246,9 @@ export default function Dialogs() {
     case 'indicatorSettings':
       return <IndicatorSettings uid={dialog.uid} onClose={close} />
     case 'alert':
-      return <AlertDialog symbol={dialog.symbol} price={dialog.price} onClose={close} />
+      return <AlertDialog symbol={dialog.symbol} price={dialog.price} line={dialog.line} alertId={dialog.alertId} onClose={close} />
+    case 'notifySettings':
+      return <NotifySettingsDialog onClose={close} />
     case 'layouts':
       return <LayoutsDialog onClose={close} />
     case 'chartSettings':

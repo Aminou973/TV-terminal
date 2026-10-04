@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.alerts.engine import AlertEngine, triggered
+from app.config import Settings
 from app.candles.bus import EventBus
 from app.db.database import Database
 from app.models import Tick, UserEvent
@@ -40,7 +41,7 @@ def test_trigger_conditions():
 def test_alert_fires_once_and_logs(db):
     bus = EventBus()
     q = bus.subscribe()
-    eng = AlertEngine(db, bus)
+    eng = AlertEngine(db, bus, Settings())
     db.execute("INSERT INTO alerts (user_id, symbol, condition, price) VALUES (1, 'ES', 'crossing_up', 100)")
     eng.reload()
     for p in (99, 99.5, 100.25, 99, 101):

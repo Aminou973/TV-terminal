@@ -299,7 +299,8 @@ export type Dialog =
   | { kind: 'symbol' }
   | { kind: 'indicators' }
   | { kind: 'indicatorSettings'; uid: string }
-  | { kind: 'alert'; symbol: string; price: number }
+  | { kind: 'alert'; symbol: string; price: number; line?: { t1: number; p1: number; t2: number; p2: number; extend: string }; alertId?: number }
+  | { kind: 'notifySettings' }
   | { kind: 'layouts' }
   | { kind: 'order'; symbol: string; side: 'buy' | 'sell'; price?: number }
   | { kind: 'chartSettings' }

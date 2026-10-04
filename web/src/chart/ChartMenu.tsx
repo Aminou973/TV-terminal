@@ -125,6 +125,22 @@ export default function ChartMenu({ menu, pane, paneId, drawings: dm, onReset, o
       { label: 'Bring to front', run: () => dm.bringToFront(dr.id) },
       { label: 'Send to back', run: () => dm.sendToBack(dr.id) },
     ]
+    const LINE_KINDS: Record<string, string> = { 'trend-line': 'none', ray: 'right', 'extended-line': 'both', 'info-line': 'none', 'trend-angle': 'none', 'horizontal-ray': 'right' }
+    if (dr.kind in LINE_KINDS && tradable) {
+      const [a, b] = dr.points as { time: number; price: number }[]
+      const pB = b ?? { time: a.time + 60, price: a.price } // a horizontal ray has one point
+      const ext = dr.kind === 'trend-line' ? (dr.style.extendLeft && dr.style.extendRight ? 'both' : dr.style.extendRight ? 'right' : dr.style.extendLeft ? 'left' : 'right') : LINE_KINDS[dr.kind]
+      out.push('sep', {
+        label: 'Add alert on this line…',
+        run: () =>
+          open({
+            kind: 'alert',
+            symbol: pane.symbol,
+            price: NaN,
+            line: { t1: Number(a.time), p1: a.price, t2: Number(pB.time), p2: pB.price, extend: ext },
+          }),
+      })
+    }
     if (dr.kind === 'horizontal-line' && tradable) {
       const level = dr.points[0].price
       out.push('sep', {

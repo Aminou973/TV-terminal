@@ -116,17 +116,61 @@ export interface Script {
 }
 
 export type AlertCondition = 'crossing' | 'crossing_up' | 'crossing_down' | 'greater' | 'less'
+export type AlertKind = 'price' | 'line' | 'indicator' | 'script'
+export type AlertFrequency = 'once' | 'once_per_bar' | 'once_per_bar_close' | 'once_per_minute' | 'every_time'
+
+/** {"ind": "rsi", "length": 14, "output": "value"} or {"value": 70} */
+export type SeriesSpec = Record<string, string | number>
+
+export interface AlertNotify {
+  webhook?: string | boolean
+  telegram?: boolean
+  email?: boolean
+}
 
 export interface Alert {
   id: number
   symbol: string
+  kind: AlertKind
   condition: AlertCondition
   price: number
+  params: Record<string, unknown>
+  tf: string
+  frequency: AlertFrequency
+  expires_ms: number | null
+  notify: AlertNotify
   message: string
   once: number
   active: number
   created_at: string
   triggered_at: string | null
+  error: string | null
+}
+
+export interface AlertIn {
+  symbol: string
+  kind?: AlertKind
+  condition: AlertCondition
+  price?: number
+  params?: Record<string, unknown>
+  tf?: string
+  frequency?: AlertFrequency
+  expires_ms?: number | null
+  message?: string
+  notify?: AlertNotify
+}
+
+export interface AlertCatalog {
+  indicators: { id: string; label: string; outputs: string[]; params: Record<string, string | number> }[]
+  email_available: boolean
+  telegram_default_bot: boolean
+}
+
+export interface NotifySettings {
+  webhook_url: string
+  telegram_bot_token: string
+  telegram_chat_id: string
+  email: string
 }
 
 export interface AlertLogEntry {
@@ -136,6 +180,7 @@ export interface AlertLogEntry {
   price: number
   message: string
   ts_ms: number
+  delivery: string
 }
 
 export interface PaperAccount {
@@ -220,8 +265,12 @@ export const deleteTemplate = (id: number) => api(`/templates/${id}`, json('DELE
 
 // ---------------------------------------------------------------- alerts ----
 export const getAlerts = () => api<Alert[]>('/alerts')
-export const createAlert = (a: { symbol: string; condition: AlertCondition; price: number; message?: string; once?: boolean }) =>
-  api<Alert>('/alerts', json('POST', a))
+export const createAlert = (a: AlertIn) => api<Alert>('/alerts', json('POST', a))
+export const updateAlert = (id: number, a: AlertIn) => api<Alert>(`/alerts/${id}`, json('PUT', a))
+export const getAlertCatalog = () => api<AlertCatalog>('/alerts/catalog')
+export const getNotifySettings = () => api<NotifySettings>('/alerts/settings')
+export const saveNotifySettings = (s: NotifySettings) => api<NotifySettings>('/alerts/settings', json('PUT', s))
+export const testNotify = (n: AlertNotify) => api<{ status: string }>('/alerts/test', json('POST', n))
 export const setAlertActive = (id: number, active: boolean) => api<Alert>(`/alerts/${id}?active=${active}`, json('PATCH'))
 export const deleteAlert = (id: number) => api(`/alerts/${id}`, json('DELETE'))
 export const getAlertLog = () => api<AlertLogEntry[]>('/alerts/log')

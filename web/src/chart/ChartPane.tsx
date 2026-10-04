@@ -781,7 +781,7 @@ export default function ChartPane({ index }: { index: number }) {
         main.createPriceLine({ price: prevClose, color: '#787b86', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true, title: 'Prev close' }),
       )
     for (const a of alerts) {
-      if (a.symbol !== pane.symbol || !a.active) continue
+      if (a.symbol !== pane.symbol || !a.active || (a.kind ?? 'price') !== 'price') continue
       linesRef.current.push(
         main.createPriceLine({ price: a.price, color: '#ff9800', lineStyle: LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true, title: '⏰' }),
       )

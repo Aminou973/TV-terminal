@@ -59,8 +59,20 @@ export interface Trade {
   bars: number
 }
 
+export interface Fill {
+  time: number
+  action: 'buy' | 'sell'
+  id: string
+  price: number
+  qty: number
+  /** what the fill did: open, close (incl. stop loss / take profit / reverse) */
+  kind: 'entry' | 'exit'
+  reason: string
+}
+
 export interface StrategyReport {
   trades: Trade[]
+  fills: Fill[]
   equity: { time: number; value: number }[]
   drawdown: { time: number; value: number }[]
   metrics: {
@@ -95,6 +107,8 @@ export interface ScriptResult {
   hlines: { id: string; price: number; title: string; color: string }[]
   markers: { time: number; position: 'aboveBar' | 'belowBar'; shape: string; color: string; text?: string }[]
   strategy: StrategyReport | null
+  /** alertcondition() calls: is the condition true on the last / previous bar */
+  alerts: { title: string; message: string; last: boolean; prev: boolean }[]
   logs: string[]
 }
 
@@ -328,6 +342,7 @@ interface Position {
 
 function runStrategy(bars: Bar[], onBar: (i: number) => void, ctl: StrategyControl, opts: StrategyOptions): StrategyReport {
   const trades: Trade[] = []
+  const fills: Fill[] = []
   const equity: { time: number; value: number }[] = []
   const drawdown: { time: number; value: number }[] = []
   let realized = 0
@@ -343,6 +358,7 @@ function runStrategy(bars: Bar[], onBar: (i: number) => void, ctl: StrategyContr
   const closePos = (price: number, time: number, i: number, reason: string) => {
     if (!pos) return
     const dir = pos.side === 'long' ? 1 : -1
+    fills.push({ time, action: dir > 0 ? 'sell' : 'buy', id: pos.id, price, qty: pos.qty, kind: 'exit', reason })
     const gross = (price - pos.entryPrice) * dir * pos.qty * opts.pointValue
     const c = fee(price, pos.qty)
     commission += c
@@ -369,6 +385,7 @@ function runStrategy(bars: Bar[], onBar: (i: number) => void, ctl: StrategyContr
     commission += c
     realized -= c
     pos = { id: o.id, side: o.side!, qty, entryPrice: price, entryTime: time, entryIndex: i, sl: o.sl, tp: o.tp }
+    fills.push({ time, action: o.side === 'long' ? 'buy' : 'sell', id: o.id, price, qty, kind: 'entry', reason: o.reason })
   }
 
   const execute = (orders: PendingOrder[], price: number, time: number, i: number) => {
@@ -439,6 +456,7 @@ function runStrategy(bars: Bar[], onBar: (i: number) => void, ctl: StrategyContr
 
   return {
     trades,
+    fills,
     equity,
     drawdown,
     metrics: {
@@ -524,6 +542,7 @@ export function runScript(
   const hlines: ScriptResult['hlines'] = []
   const markers: ScriptResult['markers'] = []
   const logs: string[] = []
+  const alerts: ScriptResult['alerts'] = []
   let onBar: ((i: number) => void) | null = null
   const strategyOpts: StrategyOptions = {
     initialCapital: 100_000,
@@ -587,6 +606,11 @@ export function runScript(
           })
       })
     },
+    /** Server-side alerts can watch this condition (fires when the last bar is true). */
+    alertcondition(cond: boolean[] | boolean, title: string, message = '') {
+      const arr = Array.isArray(cond) ? cond : new Array(n).fill(cond)
+      alerts.push({ title: String(title), message: String(message || title), last: !!arr[n - 1], prev: !!arr[n - 2] })
+    },
     log: (...a: unknown[]) => logs.push(a.map((x) => (typeof x === 'object' ? JSON.stringify(x) : String(x))).join(' ')),
     strategy: Object.assign(
       (o: Partial<StrategyOptions>) => Object.assign(strategyOpts, o),
@@ -628,6 +652,7 @@ export function runScript(
     hlines,
     markers: markers.sort((a, b) => a.time - b.time),
     strategy: report,
+    alerts,
     logs,
   }
 }

@@ -423,6 +423,21 @@ kbd { font: 11px var(--mono); color: var(--muted); }
 .form input[type='range'] { width: 100%; }
 code { font: 12px var(--mono); background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
 
+/* ---------------------------------------------------------- alerts pro ---- */
+.series-builder { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.series-builder input[type='number'] { width: 70px; }
+label.inline { display: inline-flex !important; align-items: center; gap: 4px; grid-template-columns: none !important; color: var(--muted); }
+.inline-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.msg-field { display: flex; flex-direction: column; gap: 6px; }
+.msg-field textarea { width: 100%; font: 12px var(--mono); color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; resize: vertical; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips button { font: 11px var(--mono); padding: 1px 6px; background: var(--panel-2); }
+.notify-opts { display: flex; flex-direction: column; gap: 6px; }
+.link-btn { align-self: flex-start; background: none; border: none; color: var(--accent); padding: 0; }
+.alert-main { flex: 1; min-width: 0; cursor: pointer; }
+.alert-kind { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); background: var(--accent-soft); padding: 0 5px; border-radius: 3px; }
+.modal-back .modal-back { background: rgba(0, 0, 0, .35); }
+
 /* --------------------------------------------------------- responsive ------ */
 @media (max-width: 900px) {
   .right { position: absolute; right: 44px; top: 42px; bottom: 0; z-index: 20; box-shadow: var(--shadow); }

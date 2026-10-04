@@ -181,3 +181,40 @@ def test_templates(client):
     assert client.get("/api/templates?kind=chart", headers=h).json() == []
     client.delete(f"/api/templates/{t.json()['id']}", headers=h)
     assert client.get("/api/templates?kind=indicators", headers=h).json() == []
+
+
+def test_pro_alerts_api(client):
+    h = _auth_headers(_register_and_token(client))
+    cat = client.get("/api/alerts/catalog", headers=h).json()
+    assert any(i["id"] == "rsi" for i in cat["indicators"]) and "once_per_bar_close" in cat["frequencies"]
+    ok = client.post("/api/alerts", headers=h, json={
+        "symbol": "SIM:ES", "kind": "indicator", "condition": "crossing_up", "tf": "5m", "frequency": "once_per_bar_close",
+        "params": {"left": {"ind": "rsi", "length": 14}, "right": {"value": 70}},
+        "notify": {"webhook": "https://example.com/hook"}, "message": "{{ticker}} RSI > 70",
+    })
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["notify"] == {"webhook": "https://example.com/hook"}
+    bad = client.post("/api/alerts", headers=h, json={"symbol": "SIM:ES", "kind": "indicator", "params": {"left": {"ind": "nope"}, "right": {"value": 1}}})
+    assert bad.status_code == 400
+    assert client.post("/api/alerts", headers=h, json={"symbol": "SIM:ES", "kind": "script", "params": {"name": "none", "condition": "x"}}).status_code == 400
+    client.put("/api/scripts", headers=h, json={"name": "S", "kind": "indicator", "source": "alertcondition(close.map(c => c > 0), 'Up')"})
+    sc = client.post("/api/alerts", headers=h, json={"symbol": "SIM:ES", "kind": "script", "params": {"name": "S", "condition": "Up"}})
+    assert sc.status_code == 200 and "source" not in sc.json()["params"]
+    line = client.post("/api/alerts", headers=h, json={"symbol": "SIM:ES", "kind": "line", "params": {"t1": 0, "p1": 1, "t2": 60, "p2": 2}})
+    assert line.status_code == 200
+    upd = client.put(f"/api/alerts/{line.json()['id']}", headers=h, json={"symbol": "SIM:ES", "kind": "price", "price": 3, "frequency": "every_time"})
+    assert upd.json()["kind"] == "price" and upd.json()["frequency"] == "every_time"
+    assert client.put("/api/alerts/settings", headers=h, json={"telegram_chat_id": "42", "email": "a@b.c"}).status_code == 200
+    assert client.get("/api/alerts/settings", headers=h).json()["telegram_chat_id"] == "42"
+    assert client.post("/api/alerts/test", headers=h, json={}).status_code == 400
+    t = client.post("/api/alerts/test", headers=h, json={"email": True})
+    assert "email: failed" in t.json()["status"]
+
+
+def test_ws_reconnect_churn(client):
+    # client disconnects used to race the handler's teardown and leak a CancelledError
+    token = _register_and_token(client)
+    for _ in range(25):
+        with client.websocket_connect(f"/api/stream?token={token}") as ws:
+            ws.send_json({"action": "subscribe", "symbol": "SIM:ES", "tf": "1m"})
+            assert json.loads(ws.receive_text())["type"] == "bar"

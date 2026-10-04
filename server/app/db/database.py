@@ -107,6 +107,13 @@ CREATE TABLE IF NOT EXISTS templates (
     spec        TEXT NOT NULL,
     UNIQUE(user_id, kind, name)
 );
+CREATE TABLE IF NOT EXISTS notify_settings (
+    user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    webhook_url        TEXT NOT NULL DEFAULT '',
+    telegram_bot_token TEXT NOT NULL DEFAULT '',
+    telegram_chat_id   TEXT NOT NULL DEFAULT '',
+    email              TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS kv (
     key    TEXT PRIMARY KEY,
     value  TEXT NOT NULL
@@ -127,7 +134,30 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    # columns added after a table first shipped: (table, column, definition)
+    _ADDED_COLUMNS = [
+        ("alerts", "kind", "TEXT NOT NULL DEFAULT 'price'"),       # price | line | indicator | script
+        ("alerts", "params", "TEXT NOT NULL DEFAULT '{}'"),        # kind-specific spec (JSON)
+        ("alerts", "tf", "TEXT NOT NULL DEFAULT '1m'"),
+        ("alerts", "frequency", "TEXT NOT NULL DEFAULT 'once'"),   # once | once_per_bar | once_per_bar_close | once_per_minute | every_time
+        ("alerts", "expires_ms", "INTEGER"),
+        ("alerts", "notify", "TEXT NOT NULL DEFAULT '{}'"),        # {"webhook": url, "telegram": bool, "email": bool}
+        ("alerts", "last_fired_ms", "INTEGER"),
+        ("alerts", "last_bar", "INTEGER"),
+        ("alerts", "error", "TEXT"),
+        ("alert_log", "delivery", "TEXT NOT NULL DEFAULT ''"),
+    ]
+
+    def _migrate(self) -> None:
+        for table, column, definition in self._ADDED_COLUMNS:
+            have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if column not in have:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        # alerts created before frequencies existed: once=0 meant "every time"
+        self._conn.execute("UPDATE alerts SET frequency = 'every_time' WHERE once = 0 AND frequency = 'once'")
 
     def close(self) -> None:
         if self._conn is not None:
