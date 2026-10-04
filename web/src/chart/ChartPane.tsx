@@ -192,6 +192,9 @@ export default function ChartPane({ index }: { index: number }) {
   const settings = paneSettings(pane)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  // long-lived chart callbacks read the current symbol/tf through this
+  const paneRef = useRef(pane)
+  paneRef.current = pane
   const settingsKey = JSON.stringify(settings)
   const timeless = TIMELESS.includes(chartType)
   const source = useMemo(() => sourceFor(pane.symbol, pane.tf), [pane.symbol, pane.tf])
@@ -205,6 +208,13 @@ export default function ChartPane({ index }: { index: number }) {
   /** Indicators follow what's drawn: on Renko & co they run on the bricks (as TradingView does). */
   const indicatorBars = (): BarData[] =>
     TIMELESS.includes(chartType) ? transform(chartType, visibleBars(), settingsRef.current) : visibleBars()
+
+  /** Price-based types: frame the latest ~150 bricks (fitting thousands makes them hairlines). */
+  const frameBricks = () => {
+    const chart = chartRef.current
+    const n = mainRef.current?.data().length ?? 0
+    if (chart && n) chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 5 })
+  }
 
   const renderAll = () => {
     const main = mainRef.current
@@ -290,8 +300,8 @@ export default function ChartPane({ index }: { index: number }) {
     if (useTerminal.getState().active === index) {
       const change = bar && prevClose != null ? bar.close - prevClose : null
       useCrosshair.getState().set({
-        symbol: pane.symbol,
-        tf: pane.tf,
+        symbol: paneRef.current.symbol,
+        tf: paneRef.current.tf,
         bar,
         change,
         changePct: change != null && prevClose ? (change / prevClose) * 100 : null,
@@ -351,6 +361,8 @@ export default function ChartPane({ index }: { index: number }) {
       bars: () => visibleBars().map((b) => ({ ...b, time: b.time as UTCTimestamp })),
     })
     renderAll()
+    // bricks/columns have their own x-axis: show them all rather than the old time window
+    if (TIMELESS.includes(chartType)) frameBricks()
     setGeneration((g) => g + 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartType])
@@ -440,7 +452,8 @@ export default function ChartPane({ index }: { index: number }) {
         setEmpty(bars.length === 0)
         noMore = bars.length < PAGE / 2
         renderAll()
-        chart.timeScale().scrollToRealTime()
+        if (timeless) frameBricks()
+        else chart.timeScale().scrollToRealTime()
         setDataVersion((v) => v + 1)
       })
       .catch((err) => toast('History failed', String(err.message ?? err), 'error'))
