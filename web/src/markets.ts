@@ -13,6 +13,21 @@ export function symbolRoot(symbol: string): string {
 
 export const pointValue = (symbol: string) => POINT_VALUE[symbolRoot(symbol)] ?? 1
 
+// minimum price increment — mirrors TICK_SIZE in server/app/paper/engine.py
+const TICK_SIZE: Record<string, number> = {
+  ES: 0.25, MES: 0.25, NQ: 0.25, MNQ: 0.25, YM: 1, MYM: 1, RTY: 0.1, M2K: 0.1, CL: 0.01, MCL: 0.01, NG: 0.001,
+  GC: 0.1, MGC: 0.1, SI: 0.005, SIL: 0.005, ZB: 1 / 32, ZN: 1 / 64, ZF: 1 / 128, ZT: 1 / 256, ZC: 0.25, ZS: 0.25, ZW: 0.25,
+  '6E': 0.00005, '6J': 0.0000005, '6B': 0.0001, HE: 0.025, LE: 0.025, PL: 0.1, PA: 0.5, MBT: 5,
+}
+
+export function tickSize(symbol: string, price?: number | null): number {
+  const t = TICK_SIZE[symbolRoot(symbol)]
+  if (t != null) return t
+  if (price == null) return 0.01
+  const a = Math.abs(price)
+  return a < 1 ? 0.00001 : a < 10 ? 0.0001 : 0.01
+}
+
 export const priceDigits = (v: number) => (Math.abs(v) < 1 ? 5 : Math.abs(v) < 10 ? 4 : 2)
 
 // --------------------------------------------------------- time zones ------

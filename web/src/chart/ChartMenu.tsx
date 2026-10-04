@@ -2,8 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { UTCTimestamp } from 'lightweight-charts'
 import type { Drawing, DrawingManager } from 'lightweight-charts-drawing'
 import { toolLabel } from '../DrawingToolbar'
-import { toast } from '../data'
-import { priceDigits } from '../markets'
+import { placeOrder } from '../api/client'
+import { toast, usePaper } from '../data'
+import { priceDigits, tickSize } from '../markets'
+import { useAtm } from '../trading/live'
+import { bracketPrices, ladderOrderType, roundToTick, tickDigits, type Side } from '../trading/math'
 import { useTerminal, useUi, type PaneState } from '../store'
 import { parseSpread } from './datasource'
 import { useRegistry } from './registry'
@@ -14,6 +17,8 @@ export interface MenuState {
   price: number | null
   time: number | null
   drawingId: string | null
+  /** last close on the chart, to tell limit from stop */
+  last?: number | null
 }
 
 interface Props {
@@ -65,8 +70,19 @@ export default function ChartMenu({ menu, pane, paneId, drawings: dm, onReset, o
 
   const d = menu.drawingId ? dm.get(menu.drawingId) : undefined
   const tradable = !parseSpread(pane.symbol)
-  const px = menu.price
-  const pxText = px == null ? '' : px.toFixed(priceDigits(px))
+  const tick = tickSize(pane.symbol, menu.price ?? menu.last)
+  const px = menu.price == null ? null : roundToTick(menu.price, tick)
+  const pxText = px == null ? '' : px.toFixed(tickDigits(tick))
+  const atm = useAtm()
+  const last = menu.last ?? px
+  const quickOrder = (side: Side) => {
+    if (px == null || last == null) return
+    const type = ladderOrderType(side, px, last)
+    placeOrder({ symbol: pane.symbol, side, type, qty: atm.qty, price: px, ...(atm.brackets ? bracketPrices(side, px, tick, atm.tpTicks, atm.slTicks) : {}) })
+      .then(() => { toast('Order working', `${side.toUpperCase()} ${atm.qty} ${pane.symbol} ${type} @ ${pxText}`); return usePaper.getState().refresh() })
+      .catch((e) => toast('Order rejected', String((e as Error).message), 'error'))
+  }
+  const typeFor = (side: Side) => (px != null && last != null ? ladderOrderType(side, px, last) : 'limit')
   const changed = () => useRegistry.getState().bump()
 
   const items: Item[] = d
@@ -77,8 +93,9 @@ export default function ChartMenu({ menu, pane, paneId, drawings: dm, onReset, o
         ...(px != null && tradable
           ? ([
               { label: `Add alert on ${pane.symbol} at ${pxText}`, hint: 'Alt+A', run: () => open({ kind: 'alert', symbol: pane.symbol, price: Number(pxText) }) },
-              { label: `Buy ${pane.symbol} @ ${pxText} limit`, run: () => open({ kind: 'order', symbol: pane.symbol, side: 'buy', price: Number(pxText) }) },
-              { label: `Sell ${pane.symbol} @ ${pxText} limit`, run: () => open({ kind: 'order', symbol: pane.symbol, side: 'sell', price: Number(pxText) }) },
+              { label: `Buy ${atm.qty} @ ${pxText} ${typeFor('buy')}${atm.brackets ? ' + ATM' : ''}`, run: () => quickOrder('buy') },
+              { label: `Sell ${atm.qty} @ ${pxText} ${typeFor('sell')}${atm.brackets ? ' + ATM' : ''}`, run: () => quickOrder('sell') },
+              { label: 'Create order…', hint: 'Shift+B', run: () => open({ kind: 'order', symbol: pane.symbol, side: 'buy', price: px! }) },
               'sep',
             ] as Item[])
           : []),

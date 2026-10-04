@@ -99,11 +99,16 @@ export interface ChartSettings {
   box: number
   reversal: number
   lineBreak: number
+  /** paper orders / positions drawn (and draggable) on the chart */
+  trading: boolean
+  tradeButtons: boolean
+  executions: boolean
 }
 
 export const DEFAULT_SETTINGS: ChartSettings = {
   scale: 'normal', invert: false, upColor: '#089981', downColor: '#f23645', grid: true, volume: true,
   timezone: 'exchange', countdown: true, prevClose: false, sessionBreaks: false, box: 0, reversal: 3, lineBreak: 3,
+  trading: true, tradeButtons: true, executions: true,
 }
 
 export const paneSettings = (p: PaneState): ChartSettings => ({ ...DEFAULT_SETTINGS, ...p.settings })
@@ -137,8 +142,8 @@ export interface LayoutSpec {
   syncCrosshair: boolean
 }
 
-export type RightTab = 'watchlist' | 'depth' | 'alerts' | 'details' | 'objects' | 'data'
-export type BottomTab = 'editor' | 'tester' | 'screener' | 'trading'
+export type RightTab = 'watchlist' | 'depth' | 'dom' | 'alerts' | 'details' | 'objects' | 'data'
+export type BottomTab = 'editor' | 'tester' | 'screener' | 'trading' | 'journal'
 
 export interface ReplayState {
   paneId: string

@@ -218,3 +218,34 @@ def test_ws_reconnect_churn(client):
         with client.websocket_connect(f"/api/stream?token={token}") as ws:
             ws.send_json({"action": "subscribe", "symbol": "SIM:ES", "tf": "1m"})
             assert json.loads(ws.receive_text())["type"] == "bar"
+
+
+def test_pro_paper_api(client):
+    h = _auth_headers(_register_and_token(client))
+    inst = client.get("/api/paper/instrument", params={"symbol": "SIM:ES"}, headers=h).json()
+    assert inst["tick_size"] == 0.25 and inst["point_value"] == 50
+    last = inst["last"] or client.get("/api/stats", params={"symbol": "SIM:ES"}, headers=h).json()["last"]
+    assert client.put("/api/paper/settings", json={"commission": 1.5}, headers=h).json()["commission"] == 1.5
+    o = client.post("/api/paper/orders", json={
+        "symbol": "SIM:ES", "side": "buy", "type": "limit", "qty": 1, "price": last - 50, "tp": last + 50, "sl": last - 100,
+    }, headers=h)
+    assert o.status_code == 200, o.text
+    oid = o.json()["id"]
+    m = client.patch(f"/api/paper/orders/{oid}", json={"price": last - 40}, headers=h)
+    assert m.status_code == 200 and m.json()["price"] == last - 40
+    bad = client.patch(f"/api/paper/orders/{oid}", json={"sl": last}, headers=h)
+    assert bad.status_code == 400
+    assert client.delete("/api/paper/orders", headers=h).json()["cancelled"] == 1
+    assert client.post("/api/paper/orders", json={"symbol": "SIM:ES", "side": "buy", "qty": 2}, headers=h).status_code == 200
+    br = client.put("/api/paper/positions/SIM:ES/brackets", json={"tp": last + 500, "sl": last - 500}, headers=h)
+    assert br.status_code == 200 and len(br.json()) == 2
+    pos = client.get("/api/paper/account", headers=h).json()["positions"][0]
+    assert pos["tp"] == last + 500 and pos["sl"] == last - 500
+    assert client.post("/api/paper/positions/SIM:ES/reverse", headers=h).status_code == 200
+    assert client.get("/api/paper/account", headers=h).json()["positions"][0]["qty"] == -2
+    assert client.post("/api/paper/flatten", headers=h).json()["closed"] == 1
+    trades = client.get("/api/paper/trades", headers=h).json()
+    assert [t["side"] for t in trades] == ["short", "long"] and all(t["status"] == "closed" for t in trades)
+    n = client.patch(f"/api/paper/trades/{trades[0]['id']}", json={"notes": "test", "tags": "a"}, headers=h).json()
+    assert n["notes"] == "test" and "mfe" in n
+    assert client.post("/api/paper/positions/SIM:ES/reverse", headers=h).status_code == 404

@@ -33,10 +33,13 @@ const TOOL_KEYS: Record<string, string> = {
 const ScriptEditor = lazy(() => import('./panels/ScriptEditor'))
 const StrategyTester = lazy(() => import('./panels/StrategyTester'))
 const Screener = lazy(() => import('./panels/Screener'))
+const Journal = lazy(() => import('./panels/Journal'))
+const Dom = lazy(() => import('./panels/Dom'))
 
 const RIGHT_TABS: { id: RightTab; title: string; icon: () => ReactNode }[] = [
   { id: 'watchlist', title: 'Watchlist', icon: Icon.list },
   { id: 'depth', title: 'Order book & trades', icon: Icon.depth },
+  { id: 'dom', title: 'DOM (price ladder)', icon: Icon.ladder },
   { id: 'alerts', title: 'Alerts', icon: Icon.alert },
   { id: 'details', title: 'Symbol details', icon: Icon.info },
   { id: 'objects', title: 'Object tree', icon: Icon.tree },
@@ -48,6 +51,7 @@ const BOTTOM_TABS: { id: BottomTab; title: string; icon: () => ReactNode }[] = [
   { id: 'tester', title: 'Strategy Tester', icon: Icon.flask },
   { id: 'screener', title: 'Screener', icon: Icon.filter },
   { id: 'trading', title: 'Trading Panel', icon: Icon.wallet },
+  { id: 'journal', title: 'Trade Journal', icon: Icon.journal },
 ]
 
 function ChartGrid() {
@@ -105,6 +109,7 @@ function BottomPanel() {
             {tab === 'tester' && <StrategyTester />}
             {tab === 'screener' && <Screener />}
             {tab === 'trading' && <TradingPanel />}
+            {tab === 'journal' && <Journal />}
           </Suspense>
         </div>
       )}
@@ -121,6 +126,11 @@ function RightPanel() {
         <aside className="right">
           {tab === 'watchlist' && <Watchlist />}
           {tab === 'depth' && <Depth />}
+          {tab === 'dom' && (
+            <Suspense fallback={<p className="muted pad">Loading…</p>}>
+              <Dom />
+            </Suspense>
+          )}
           {tab === 'alerts' && <AlertsPanel />}
           {tab === 'details' && <Details />}
           {tab === 'objects' && <ObjectTree />}
@@ -223,6 +233,9 @@ function Terminal() {
       } else if (e.key === '/') {
         e.preventDefault()
         ui.open({ kind: 'symbol' })
+      } else if (e.shiftKey && !mod && !e.altKey && (e.code === 'KeyB' || e.code === 'KeyS')) {
+        e.preventDefault()
+        ui.open({ kind: 'order', symbol: pane.symbol, side: e.code === 'KeyB' ? 'buy' : 'sell' })
       } else if (e.altKey && e.code === 'KeyA') {
         e.preventDefault()
         ui.open({ kind: 'alert', symbol: pane.symbol, price: NaN })

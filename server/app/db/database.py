@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     symbol       TEXT NOT NULL,
     side         TEXT NOT NULL,          -- buy | sell
-    type         TEXT NOT NULL,          -- market | limit | stop
+    type         TEXT NOT NULL,          -- market | limit | stop | stop_limit | trailing_stop
     qty          REAL NOT NULL,
     price        REAL,                   -- limit / stop trigger price
     status       TEXT NOT NULL,          -- working | filled | cancelled | rejected
@@ -99,6 +99,26 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     avg_price    REAL NOT NULL,
     PRIMARY KEY (user_id, symbol)
 );
+CREATE TABLE IF NOT EXISTS paper_trades (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol       TEXT NOT NULL,
+    side         TEXT NOT NULL,          -- long | short
+    qty          REAL NOT NULL,          -- largest size held during the trade
+    entry_price  REAL NOT NULL,          -- average entry
+    exit_price   REAL,                   -- average exit
+    exit_qty     REAL NOT NULL DEFAULT 0,
+    entry_ms     INTEGER NOT NULL,
+    exit_ms      INTEGER,
+    pnl          REAL NOT NULL DEFAULT 0, -- net of commission
+    commission   REAL NOT NULL DEFAULT 0,
+    high         REAL NOT NULL,          -- price extremes while open (for MAE / MFE)
+    low          REAL NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'open',
+    notes        TEXT NOT NULL DEFAULT '',
+    tags         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS paper_trades_user ON paper_trades(user_id, status);
 CREATE TABLE IF NOT EXISTS templates (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -149,6 +169,18 @@ class Database:
         ("alerts", "last_bar", "INTEGER"),
         ("alerts", "error", "TEXT"),
         ("alert_log", "delivery", "TEXT NOT NULL DEFAULT ''"),
+        ("paper_accounts", "commission", "REAL NOT NULL DEFAULT 0"),  # $ per contract per side
+        ("paper_orders", "stop_price", "REAL"),        # stop_limit trigger
+        ("paper_orders", "trail", "REAL"),             # trailing_stop distance (price units)
+        ("paper_orders", "trail_ref", "REAL"),         # best price seen since placing
+        ("paper_orders", "triggered", "INTEGER NOT NULL DEFAULT 0"),
+        ("paper_orders", "parent_id", "INTEGER"),
+        ("paper_orders", "oco", "TEXT"),               # orders sharing a group cancel each other
+        ("paper_orders", "reduce_only", "INTEGER NOT NULL DEFAULT 0"),
+        ("paper_orders", "tag", "TEXT NOT NULL DEFAULT ''"),  # entry | tp | sl | close
+        ("paper_orders", "tp", "REAL"),                # bracket legs to attach when this fills
+        ("paper_orders", "sl", "REAL"),
+        ("paper_orders", "reason", "TEXT"),
     ]
 
     def _migrate(self) -> None:

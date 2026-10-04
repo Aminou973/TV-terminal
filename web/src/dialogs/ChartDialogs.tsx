@@ -42,7 +42,7 @@ export function ChartSettingsDialog({ onClose }: { onClose: () => void }) {
   const pane = useTerminal((s) => s.panes[s.active])
   const setSettings = useTerminal((s) => s.setSettings)
   const s = paneSettings(pane)
-  const [tab, setTab] = useState<'symbol' | 'scales' | 'appearance' | 'types'>('symbol')
+  const [tab, setTab] = useState<'symbol' | 'scales' | 'appearance' | 'trading' | 'types'>('symbol')
   const set = (patch: Partial<ChartSettings>) => setSettings(patch) // live preview
 
   const applyAll = () => {
@@ -55,7 +55,7 @@ export function ChartSettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Chart settings" onClose={onClose}>
       <div className="seg">
-        {(['symbol', 'scales', 'appearance', 'types'] as const).map((t) => (
+        {(['symbol', 'scales', 'appearance', 'trading', 'types'] as const).map((t) => (
           <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
             {t === 'types' ? 'Chart types' : t}
           </button>
@@ -96,6 +96,14 @@ export function ChartSettingsDialog({ onClose }: { onClose: () => void }) {
             <label><span>Grid lines</span><input type="checkbox" checked={s.grid} onChange={(e) => set({ grid: e.target.checked })} /></label>
             <label><span>Volume</span><input type="checkbox" checked={s.volume} onChange={(e) => set({ volume: e.target.checked })} /></label>
             <label><span>Session breaks</span><input type="checkbox" checked={s.sessionBreaks} onChange={(e) => set({ sessionBreaks: e.target.checked })} /></label>
+          </>
+        )}
+        {tab === 'trading' && (
+          <>
+            <label><span>Orders &amp; positions on chart</span><input type="checkbox" checked={s.trading} onChange={(e) => set({ trading: e.target.checked })} /></label>
+            <label><span>Buy / Sell buttons</span><input type="checkbox" checked={s.tradeButtons} onChange={(e) => set({ tradeButtons: e.target.checked })} /></label>
+            <label><span>Executions</span><input type="checkbox" checked={s.executions} onChange={(e) => set({ executions: e.target.checked })} /></label>
+            <p className="muted small">Drag an order or a TP / SL line to move it. Paper trading only.</p>
           </>
         )}
         {tab === 'types' && (

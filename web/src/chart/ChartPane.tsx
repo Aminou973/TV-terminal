@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AreaSeries,
   BarSeries,
@@ -21,7 +21,7 @@ import {
 } from 'lightweight-charts'
 import { DrawingManager, type Drawing, type DrawingKind } from 'lightweight-charts-drawing'
 import { getDrawings, getStats, saveDrawings, type BarData } from '../api/client'
-import { toast, useAlerts, usePaper, useSymbols } from '../data'
+import { toast, useAlerts, useSymbols } from '../data'
 import { formatTime, resolveTz, sessionKey } from '../markets'
 import {
   paneSettings,
@@ -35,6 +35,7 @@ import {
 } from '../store'
 import { resolveIndicator } from './catalog'
 import ChartMenu, { type MenuState } from './ChartMenu'
+import OrderOverlay, { TradeButtons } from './OrderOverlay'
 import { sourceFor } from './datasource'
 import { IndicatorLayer, indicatorLabel } from './indicators'
 import { registerPane, useRegistry } from './registry'
@@ -164,8 +165,6 @@ export default function ChartPane({ index }: { index: number }) {
   const replay = useTerminal((s) => (s.replay?.paneId === pane.id ? s.replay : null))
   const market = useSymbols((s) => s.list.find((x) => x.symbol === pane.symbol)?.market)
   const alerts = useAlerts((s) => s.list)
-  const paperPositions = usePaper((s) => s.positions)
-  const paperOrders = usePaper((s) => s.orders)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -786,34 +785,7 @@ export default function ChartPane({ index }: { index: number }) {
         main.createPriceLine({ price: a.price, color: '#ff9800', lineStyle: LineStyle.Dotted, lineWidth: 1, axisLabelVisible: true, title: '⏰' }),
       )
     }
-    for (const p of paperPositions) {
-      if (p.symbol !== pane.symbol) continue
-      const up = p.unrealized_pnl >= 0
-      linesRef.current.push(
-        main.createPriceLine({
-          price: p.avg_price,
-          color: p.qty > 0 ? '#2962ff' : '#f23645',
-          lineStyle: LineStyle.Solid,
-          lineWidth: 1,
-          axisLabelVisible: true,
-          title: `${p.qty > 0 ? 'LONG' : 'SHORT'} ${Math.abs(p.qty)} ${up ? '+' : ''}${p.unrealized_pnl.toFixed(2)}`,
-        }),
-      )
-    }
-    for (const o of paperOrders) {
-      if (o.symbol !== pane.symbol || o.status !== 'working' || o.price == null) continue
-      linesRef.current.push(
-        main.createPriceLine({
-          price: o.price,
-          color: o.side === 'buy' ? '#2962ff' : '#f23645',
-          lineStyle: LineStyle.Dashed,
-          lineWidth: 1,
-          axisLabelVisible: true,
-          title: `${o.side.toUpperCase()} ${o.type.toUpperCase()} ${o.qty}`,
-        }),
-      )
-    }
-  }, [alerts, paperPositions, paperOrders, pane.symbol, generation, prevClose, settings.prevClose])
+  }, [alerts, pane.symbol, generation, prevClose, settings.prevClose])
 
   // --------------------------------------------- countdown to bar close ----
   useEffect(() => {
@@ -930,7 +902,8 @@ export default function ChartPane({ index }: { index: number }) {
     const time = chart.timeScale().coordinateToTime(x)
     const drawingId = dm.hoveredId()
     if (useTerminal.getState().active !== index) useTerminal.getState().setActive(index)
-    setMenu({ x, y, price: price == null ? null : Number(price), time: time == null ? null : (time as number), drawingId })
+    const lastBar = barsRef.current[barsRef.current.length - 1]
+    setMenu({ x, y, price: price == null ? null : Number(price), time: time == null ? null : (time as number), drawingId, last: lastBar?.close ?? null })
   }
 
   // ---------------------------------------------------------------- legend --
@@ -943,6 +916,8 @@ export default function ChartPane({ index }: { index: number }) {
   const removeIndicator = useTerminal((s) => s.removeIndicator)
   const openDialog = useUi((s) => s.open)
   const focus = () => useTerminal.getState().setActive(index)
+  // executions snap to bars; price-based charts have no real time axis
+  const getBarsForMarkers = useCallback(() => (timeless ? null : barsRef.current), [timeless])
 
   return (
     <div
@@ -951,6 +926,18 @@ export default function ChartPane({ index }: { index: number }) {
       onContextMenu={onContextMenu}
     >
       <div ref={containerRef} className="chart-canvas" />
+      {!source.synthetic && replay == null && (
+        <OrderOverlay
+          chart={chartRef.current}
+          series={mainRef.current}
+          symbol={pane.symbol}
+          generation={generation}
+          showOrders={settings.trading}
+          showExecutions={settings.executions}
+          getBars={getBarsForMarkers}
+          dataVersion={dataVersion}
+        />
+      )}
       <div className="legend">
         <div className="legend-row main">
           <span className="legend-sym">{pane.symbol}</span>
@@ -968,6 +955,7 @@ export default function ChartPane({ index }: { index: number }) {
           )}
           {loading && <span className="legend-loading">loading…</span>}
         </div>
+        {settings.tradeButtons && !source.synthetic && replay == null && <TradeButtons symbol={pane.symbol} />}
         {(pane.compares ?? []).map((sym, i) => (
             <div key={sym} className="legend-row ind">
               <span className="legend-name" style={{ color: COMPARE_COLORS[i % COMPARE_COLORS.length] }}>{sym}</span>

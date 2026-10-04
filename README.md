@@ -17,7 +17,8 @@ A self-hosted, open-source TradingView-style trading terminal. CME futures from 
 | **Bar replay** | Pick a bar, then play / step forward at 1–10× with indicators recalculated as bars arrive |
 | **Screener** | RSI, SMA trend, ATR %, change % across every stored symbol, filterable and sortable |
 | **Alerts** | Server-side alerts on price, trend lines (right-click a line), indicator vs indicator/value (RSI, MACD, BB, SMA/EMA, Stoch, CCI, volume) and OpenScript `alertcondition()` / strategy fills. Crossing / up / down / greater / less, trigger once · once per bar · once per bar close · once per minute · every time, expiry, `{{ticker}}`/`{{close}}`/`{{strategy.order.action}}` message placeholders → toast, browser notification, log, **webhook** (JSON passthrough), **Telegram**, **email** |
-| **Trading** | Paper trading (market/limit/stop, positions, P&L with futures point values) with positions and orders drawn on the chart · optional order routing to NinjaTrader 8 |
+| **Trading** | Paper trading on the live feed: market, limit, stop, stop-limit and trailing-stop orders · take-profit / stop-loss brackets (OCO, reduce-only) · drag orders, brackets and position TP/SL on the chart · one-click Buy/Sell in the chart legend · DOM price ladder (click to trade, drag to move, ATM brackets, volume at price) · reverse, flatten all, cancel all · risk-% sizing · commission · execution markers · optional order routing to NinjaTrader 8 |
+| **Trade journal** | Every flat → position → flat round trip with entry/exit, hold time, P&L net of commission, MAE / MFE, notes and tags · win rate, profit factor, expectancy, drawdown, streaks, equity curve · breakdown by symbol, side, tag, weekday and hour · CSV export |
 | **Market panels** | Watchlists, order book + time & sales, symbol details |
 | **App** | Multi-user (JWT), layouts/watchlists/drawings/scripts stored per user, installable PWA, single Docker image |
 
@@ -80,6 +81,7 @@ Tests: `cd server && pytest` · `cd web && npm test`.
 | Ctrl+Z / Ctrl+Y | Undo / redo drawings |
 | Alt+R · Alt+S | Reset chart view · snapshot |
 | Alt+A · Alt+I | New alert · indicators |
+| Shift+B · Shift+S | Buy · sell order ticket |
 | Esc · Del | Cancel tool · delete selected drawing |
 | Right-click | Chart or drawing context menu |
 
@@ -107,7 +109,8 @@ Tests: `cd server && pytest` · `cd web && npm test`.
 - `WS /api/stream?token=…` — `subscribe` bars · `subscribe_quotes` · `subscribe_trades` · `subscribe_book`; per-user `alert` / `paper` / `broker` events
 - `GET /api/symbols` · `/api/quote` · `/api/stats` · `/api/screener` · `/api/health`
 - `/api/watchlists` · `/api/layouts` · `/api/drawings/{symbol}` · `/api/scripts`
-- `/api/alerts` (+ `/{id}` PUT/PATCH/DELETE, `/log`, `/catalog`, `/settings`, `/test`) · `/api/paper/{account,orders,positions/{s}/close,reset}`
+- `/api/alerts` (+ `/{id}` PUT/PATCH/DELETE, `/log`, `/catalog`, `/settings`, `/test`)
+- `/api/paper/account` · `/orders` (POST, `DELETE` all, `/{id}` PATCH/DELETE) · `/positions/{s}/{close,reverse,brackets}` · `/flatten` · `/trades` (+ `/{id}` PATCH notes/tags) · `/instrument` · `/settings` · `/reset`
 - `/api/broker/ninja/{status,orders}`
 
 ## Legal notes

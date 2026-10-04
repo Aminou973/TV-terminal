@@ -42,6 +42,8 @@ export const Icon = {
   code: () => <I><path d="M8 7l-5 5 5 5M16 7l5 5-5 5" /></I>,
   flask: () => <I><path d="M9 3h6M10 3v6L4 19a1 1 0 001 2h14a1 1 0 001-2l-6-10V3" /></I>,
   filter: () => <I><path d="M3 5h18l-7 8v6l-4-2v-4z" /></I>,
+  ladder: () => <I><path d="M6 3v18M18 3v18M6 7h12M6 12h12M6 17h12" /></I>,
+  journal: () => <I><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M9 9h6M9 13h6" /></I>,
   wallet: () => <I><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2" /></I>,
   plus: () => <I><path d="M12 5v14M5 12h14" /></I>,
   x: () => <I><path d="M6 6l12 12M18 6L6 18" /></I>,

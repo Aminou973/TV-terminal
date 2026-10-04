@@ -335,17 +335,19 @@
   <div class="wrap">
     <div class="feature">
       <div class="copy">
-        <span class="tag">Paper trading &amp; NinjaTrader 8</span>
-        <h3>Practice on live data, then route to NT8</h3>
-        <p>Paper trade on the live feed with market, limit and stop orders — positions and working orders drawn right on the chart. When you're ready, route orders to your NinjaTrader 8 account.</p>
+        <span class="tag">Pro trading &amp; NinjaTrader 8</span>
+        <h3>Trade from the chart, the DOM or the ticket</h3>
+        <p>Paper trade on the live feed with market, limit, stop, stop-limit and trailing orders. Attach take-profit and stop-loss brackets, then drag any order or bracket on the chart to move it. Every trade lands in your journal. When you're ready, route orders to your NinjaTrader 8 account.</p>
         <ul class="ticks">
-          <li>Order book and time &amp; sales with buy/sell aggressor colouring</li>
-          <li>Real P&amp;L with futures point values (ES $50, NQ $20 …)</li>
+          <li>DOM price ladder: click to buy or sell, drag to move, ATM brackets</li>
+          <li>OCO bracket orders, reduce-only exits, reverse, flatten all</li>
+          <li>Trade journal with win rate, profit factor, drawdown, MAE / MFE, notes and tags</li>
+          <li>Risk-based position sizing and real P&amp;L with futures point values (ES $50, NQ $20 …)</li>
           <li>Server-side alerts on price, trend lines, indicators and script signals</li><li>Webhook, Telegram and email delivery with message placeholders</li>
           <li>NinjaTrader routing is opt-in, admin-only and allow-listed per account</li>
         </ul>
       </div>
-      <div class="shot"><img src="img/trading.jpg" width="1600" height="1000" loading="lazy" alt="Live 1-minute chart with a long position and buy-limit order lines, the order book and time and sales, and the paper trading panel"></div>
+      <div class="shot"><img src="img/trading.jpg" width="1600" height="1000" loading="lazy" alt="Live 1-minute chart with a long position, draggable take-profit and stop-loss lines, a pending bracket order, the DOM price ladder and the trading panel"></div>
     </div>
   </div>
 </section>
@@ -382,7 +384,7 @@
       <div class="col">
         <h4><span>⚡</span> Trading &amp; platform</h4>
         <ul>
-          <li>Paper trading</li><li>NinjaTrader 8 routing</li><li>Server-side alerts</li><li>Order book &amp; tape</li>
+          <li>Paper trading</li><li>Bracket &amp; OCO orders</li><li>DOM price ladder</li><li>Trade journal</li><li>NinjaTrader 8 routing</li><li>Server-side alerts</li><li>Order book &amp; tape</li>
           <li>Multi-user accounts</li><li>Installable app</li><li>One-command Docker</li><li>Your data on your disk</li>
         </ul>
       </div>
@@ -406,6 +408,7 @@
       <div class="key"><span>Long position</span><span><kbd>Alt</kbd> <kbd>P</kbd></span></div>
       <div class="key"><span>Undo / redo</span><span><kbd>Ctrl</kbd> <kbd>Z</kbd> · <kbd>Ctrl</kbd> <kbd>Y</kbd></span></div>
       <div class="key"><span>New alert</span><span><kbd>Alt</kbd> <kbd>A</kbd></span></div>
+      <div class="key"><span>Buy / sell order</span><span><kbd>Shift</kbd> <kbd>B</kbd> / <kbd>S</kbd></span></div>
       <div class="key"><span>Indicators</span><span><kbd>Alt</kbd> <kbd>I</kbd></span></div>
       <div class="key"><span>Reset chart</span><span><kbd>Alt</kbd> <kbd>R</kbd></span></div>
       <div class="key"><span>Snapshot</span><span><kbd>Alt</kbd> <kbd>S</kbd></span></div>
@@ -452,8 +455,8 @@
     <div class="road">
       <div class="phase done"><span class="st">Shipped</span><h4>Pro charting</h4><p>Price-based charts, any interval, compare &amp; spreads, chart settings, drawing menus, style editor, object tree, undo, templates.</p></div>
       <div class="phase done"><span class="st">Shipped</span><h4>Pro alerts</h4><p>Alerts on indicators, trend lines and script signals; webhook, Telegram and email delivery; trigger frequency and expiry.</p></div>
-      <div class="phase next"><span class="st">Next</span><h4>Pro trading</h4><p>DOM ladder, bracket orders with SL/TP, drag orders on the chart, trade journal.</p></div>
-      <div class="phase plan"><span class="st">Planned</span><h4>Market data</h4><p>News, economic calendar, earnings, fundamentals, heatmap and market overview.</p></div>
+      <div class="phase done"><span class="st">Shipped</span><h4>Pro trading</h4><p>DOM ladder, bracket and OCO orders, stop-limit and trailing stops, drag orders on the chart, trade journal.</p></div>
+      <div class="phase next"><span class="st">Next</span><h4>Market data</h4><p>News, economic calendar, earnings, fundamentals, heatmap and market overview.</p></div>
     </div>
   </div>
 </section>

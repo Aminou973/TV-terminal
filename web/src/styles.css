@@ -319,6 +319,118 @@ button.link:hover { color: var(--text); }
 .ticket-go { color: #fff !important; padding: 9px; font-weight: 600; }
 .ticket-go.buy { background: var(--accent); }
 .ticket-go.sell { background: var(--down); }
+.ticket { overflow-y: auto; }
+.ticket-side button small { display: block; font-family: var(--mono); font-size: 11px; opacity: .85; }
+.ticket .qty-row { display: flex; gap: 3px; }
+.ticket .qty-row input { flex: 1; min-width: 0; }
+.ticket .qty-row button { padding: 3px 7px; }
+.ticket .qty-row button.on { background: var(--accent-soft); color: var(--accent); }
+.ticket-brackets { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.ticket-brackets-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 11px; }
+.ticket-brackets label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 12px; }
+.ticket-brackets label.inline input[type='number'] { width: 72px; flex: none; }
+.ticket-brackets label.inline input[type='checkbox'] { width: auto; }
+.seg.mini button { padding: 1px 7px; font-size: 11px; text-transform: none; }
+.ticket-risk { display: flex; gap: 10px; flex-wrap: wrap; font-family: var(--mono); }
+.acct .spacer { flex: 1; }
+.acct > button { padding: 4px 10px; }
+.acct-settings { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.acct-settings label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.acct-settings input { width: 150px; }
+.editable { cursor: text; border-bottom: 1px dashed var(--muted); }
+.cell-input { width: 96px; padding: 1px 4px; }
+.row-btns { display: flex; gap: 4px; }
+
+/* ---------------------------------------------------------------- DOM --- */
+.dom { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 12px; }
+.dom-head { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.dom-pos { display: flex; gap: 8px; align-items: baseline; font-family: var(--mono); min-height: 18px; }
+.dom-qty, .dom-atm, .dom-btns { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.dom-qty input { width: 54px; }
+.dom-qty button, .dom-btns button { padding: 3px 7px; }
+.dom-qty button.on, .dom-btns button.on { background: var(--accent-soft); color: var(--accent); }
+.dom-atm label { display: flex; align-items: center; gap: 3px; color: var(--muted); }
+.dom-atm input[type='number'] { width: 48px; }
+.dom-btns .buy { background: var(--accent); color: #fff; }
+.dom-btns .sell { background: var(--down); color: #fff; }
+.dom-cols, .dom-row { display: grid; grid-template-columns: 1fr 1.1fr 1.3fr 1.1fr 1fr 1.2fr; }
+.dom-cols { color: var(--muted); font-size: 10px; text-transform: uppercase; padding: 3px 0; border-bottom: 1px solid var(--line); text-align: center; }
+.dom-body { flex: 1; min-height: 0; overflow: hidden; user-select: none; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.dom-body.dragging { cursor: grabbing; }
+.dom-row { height: 18px; line-height: 18px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.dom-row > span { position: relative; text-align: center; overflow: hidden; white-space: nowrap; }
+.dom-row > span i { position: absolute; top: 2px; bottom: 2px; z-index: 0; opacity: .28; }
+.dom-bid, .dom-ask { cursor: pointer; }
+.dom-bid { color: var(--accent); }
+.dom-bid i { right: 0; background: var(--accent); }
+.dom-ask { color: var(--down); }
+.dom-ask i { left: 0; background: var(--down); }
+.dom-bid:hover { background: var(--accent-soft); }
+.dom-ask:hover { background: color-mix(in srgb, var(--down) 16%, transparent); }
+.dom-price { color: var(--text); background: var(--panel-2); }
+.dom-row.last .dom-price { background: var(--warn); color: #000; font-weight: 700; }
+.dom-row.avg.long .dom-price { box-shadow: inset 3px 0 0 var(--accent); }
+.dom-row.avg.short .dom-price { box-shadow: inset 3px 0 0 var(--down); }
+.dom-row.drop { background: var(--accent-soft); }
+.dom-vol { color: var(--muted); text-align: left !important; }
+.dom-vol i.b { left: 0; background: var(--up); }
+.dom-vol i.s { left: 0; background: var(--down); opacity: .18 !important; }
+.dom-mine { display: flex; justify-content: center; gap: 2px; }
+.dom-order { position: relative; z-index: 1; padding: 0 5px; border-radius: 3px; color: #fff; cursor: grab; font-size: 11px; line-height: 16px; margin-top: 1px; }
+.dom-order.buy { background: var(--accent); }
+.dom-order.sell { background: var(--down); }
+.dom-order.tp { background: var(--up); }
+.dom-order.sl { background: #f7525f; }
+
+/* ------------------------------------------------------------ journal --- */
+.journal { height: 100%; display: flex; flex-direction: column; min-height: 0; gap: 6px; padding: 8px; }
+.journal-filters { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.journal-filters .spacer { flex: 1; }
+.journal-top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.jstats { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.jstat { display: flex; flex-direction: column; padding: 5px 8px; background: var(--panel-2); border-radius: 5px; }
+.jstat span { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+.jstat b { font-family: var(--mono); font-size: 13px; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.equity { width: 100%; height: 120px; background: var(--panel-2); border-radius: 5px; }
+.equity .zero { stroke: var(--muted); stroke-dasharray: 3 3; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.equity .stroke { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.equity .stroke.up { stroke: var(--up); }
+.equity .stroke.down { stroke: var(--down); }
+.equity .fill.up { fill: color-mix(in srgb, var(--up) 18%, transparent); }
+.equity .fill.down { fill: color-mix(in srgb, var(--down) 18%, transparent); }
+.equity-empty { display: flex; align-items: center; justify-content: center; height: 120px; background: var(--panel-2); border-radius: 5px; padding: 8px; text-align: center; }
+.journal .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.journal-breakdown { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; align-content: start; }
+.grid-table tr.sel { background: var(--accent-soft); }
+.notes-row td { background: var(--panel-2); }
+.notes-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.trade-notes { display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; align-items: end; white-space: normal; }
+.trade-notes label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.trade-notes textarea { resize: vertical; font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+.tag { display: inline-block; padding: 0 6px; margin-right: 3px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
+
+/* ------------------------------------------------- chart trading layer --- */
+.order-overlay { position: absolute; top: 0; left: 0; bottom: 0; z-index: 4; pointer-events: none; }
+.order-chip {
+  position: absolute; top: 0; right: 4px; height: 20px; display: flex; align-items: stretch; pointer-events: auto;
+  border: 1px solid; border-radius: 3px; background: var(--panel); font-size: 11px; font-family: var(--mono);
+  box-shadow: 0 1px 4px rgba(0,0,0,.3); user-select: none; white-space: nowrap;
+}
+.order-chip.draggable { cursor: ns-resize; }
+.order-chip.dragging { opacity: .9; box-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.chip-label { color: #fff; padding: 0 6px; line-height: 18px; font-weight: 600; }
+.chip-pnl, .chip-price { padding: 0 6px; line-height: 18px; }
+.chip-price { color: var(--strong); border-left: 1px solid var(--line); }
+.chip-btn { background: none; border: none; border-left: 1px solid var(--line); border-radius: 0; padding: 0 6px; font-size: 10px; color: var(--text); line-height: 18px; }
+.chip-btn:hover { background: var(--hover); }
+.chip-btn.x:hover { color: var(--down); }
+.trade-buttons { display: inline-flex; align-items: stretch; margin: 3px 0; pointer-events: auto; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.3); background: var(--panel); }
+.trade-buttons .spread { display: flex; align-items: center; padding: 0 4px; font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.trade-buttons button { border: none; border-radius: 0; color: #fff; padding: 2px 8px; font-family: var(--mono); font-size: 12px; line-height: 1.15; min-width: 74px; }
+.trade-buttons button small { display: block; font-size: 9px; letter-spacing: .05em; opacity: .85; font-family: inherit; }
+.trade-buttons .sell { background: var(--down); text-align: left; }
+.trade-buttons .buy { background: var(--accent); text-align: right; }
+.trade-buttons input { width: 44px; border: none; border-radius: 0; text-align: center; background: var(--panel); }
 
 /* ------------------------------------------------------------ modals ------- */
 .modal-back { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; padding: 16px; }
@@ -449,6 +561,8 @@ label.inline { display: inline-flex !important; align-items: center; gap: 4px; g
   .equity { min-height: 200px; }
   .trading { flex-direction: column; }
   .ticket { width: auto; border-left: none; border-top: 1px solid var(--line); }
+  .journal-top { grid-template-columns: 1fr; }
+  .trade-notes { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .draw-toolbar { display: none; }
