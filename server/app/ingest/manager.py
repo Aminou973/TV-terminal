@@ -34,6 +34,8 @@ class IngestManager:
         self.book_throttle_s = 0.25
         # sync callbacks run for every tick after candle aggregation (alerts, paper fills)
         self.tick_listeners: list = []
+        self.ninja: NinjaTcpProvider | None = None
+        self.order_update_listeners: list = []
 
     # -- lifecycle -------------------------------------------------------------
     async def start(self) -> None:
@@ -43,13 +45,14 @@ class IngestManager:
                 SimProvider(self.settings.replay_symbol, seed=self.settings.replay_seed, on_book=self.publish_book)
             )
         if self.settings.ninja_enabled:
-            providers.append(
-                NinjaTcpProvider(
-                    self.settings.ninja_tcp_host,
-                    self.settings.ninja_tcp_port,
-                    on_bars=self._on_historical_bars,
-                )
+            self.ninja = NinjaTcpProvider(
+                self.settings.ninja_tcp_host,
+                self.settings.ninja_tcp_port,
+                on_bars=self._on_historical_bars,
+                on_book=self.publish_book,
+                on_order_update=lambda f: [cb(f) for cb in self.order_update_listeners],
             )
+            providers.append(self.ninja)
         if self.settings.yf_enabled and self.settings.yf_tickers:
             providers.append(YFinanceProvider(self.settings.yf_tickers, self.store, poll_s=self.settings.yf_poll_s))
         if self.settings.ccxt_enabled and self.settings.ccxt_symbols:

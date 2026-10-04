@@ -224,6 +224,18 @@ export const cancelOrder = (id: number) => api(`/paper/orders/${id}`, json('DELE
 export const closePosition = (symbol: string) => api<PaperOrder>(`/paper/positions/${enc(symbol)}/close`, json('POST'))
 export const resetPaper = () => api<PaperAccount>('/paper/reset', json('POST'))
 
+// ---------------------------------------------------- NinjaTrader route ----
+export interface NinjaStatus {
+  enabled: boolean
+  connected: boolean
+  account: string
+  contracts: Record<string, string>
+  can_trade: boolean
+}
+export const getNinjaStatus = () => api<NinjaStatus>('/broker/ninja/status')
+export const placeNinjaOrder = (o: { symbol: string; side: 'buy' | 'sell'; type: PaperOrder['type']; qty: number; price?: number }) =>
+  api<{ ref: string; status: string; contract: string; account: string }>('/broker/ninja/orders', json('POST', o))
+
 // ------------------------------------------------------------------- auth ----
 export interface AuthResponse {
   access_token: string

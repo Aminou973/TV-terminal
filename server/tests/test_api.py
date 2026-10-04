@@ -163,3 +163,11 @@ def test_history_limit_stats_screener(client):
     assert [b["symbol"] for b in batch] == ["SIM:ES"]
     rows = client.get("/api/screener", headers=h).json()["rows"]
     assert any(r["symbol"] == "SIM:ES" for r in rows)
+
+
+def test_ninja_routing_is_off_by_default(client):
+    h = _auth_headers(_register_and_token(client))
+    st = client.get("/api/broker/ninja/status", headers=h).json()
+    assert st["enabled"] is False and st["connected"] is False
+    r = client.post("/api/broker/ninja/orders", json={"symbol": "ES", "side": "buy", "qty": 1}, headers=h)
+    assert r.status_code in (400, 403)

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ninja_enabled: bool = True
     ninja_tcp_host: str = "127.0.0.1"
     ninja_tcp_port: int = 5555
+    # order routing to NT8 (admin only; the AddOn must also allow it and the account)
+    ninja_orders_enabled: bool = False
+    ninja_order_account: str = "Sim101"
 
     # live crypto via ccxt (Binance public market data, no API key needed)
     ccxt_enabled: bool = True
@@ -41,6 +44,9 @@ class Settings(BaseSettings):
     yf_enabled: bool = True
     yf_tickers: list[str] = ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "ES=F", "NQ=F", "GC=F", "EURUSD=X"]
     yf_poll_s: float = 15.0
+
+    # built web app (web/dist) to serve from this process; empty/missing = API only
+    web_dist: Path = Path("../web/dist")
 
     # -- streaming -----------------------------------------------------------
     # throttle for forming-bar updates pushed per symbol (seconds)

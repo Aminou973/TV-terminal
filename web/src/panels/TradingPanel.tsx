@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { cancelOrder, closePosition, placeOrder, resetPaper, type PaperOrder } from '../api/client'
+import { cancelOrder, closePosition, getNinjaStatus, placeNinjaOrder, placeOrder, resetPaper, type NinjaStatus, type PaperOrder } from '../api/client'
 import { toast, usePaper } from '../data'
 import { priceDigits } from '../markets'
 import { useTerminal } from '../store'
@@ -12,10 +12,23 @@ export function OrderTicket({ symbol, side: initialSide, price: initialPrice, on
   const [qty, setQty] = useState(1)
   const [price, setPrice] = useState(initialPrice ? String(initialPrice) : '')
   const [busy, setBusy] = useState(false)
+  const [route, setRoute] = useState<'paper' | 'ninja'>('paper')
+  const [ninja, setNinja] = useState<NinjaStatus | null>(null)
+
+  useEffect(() => {
+    getNinjaStatus().then(setNinja).catch(() => {})
+  }, [])
 
   const submit = async () => {
     setBusy(true)
     try {
+      if (route === 'ninja') {
+        if (!window.confirm(`Send a REAL order to NinjaTrader account ${ninja?.account}?\n${side.toUpperCase()} ${qty} ${symbol} ${type}${type !== 'market' ? ' @ ' + price : ''}`)) return
+        const r = await placeNinjaOrder({ symbol, side, type, qty, price: type === 'market' ? undefined : Number(price) })
+        toast('Sent to NinjaTrader', `${r.account} · ${r.contract} · ref ${r.ref}`)
+        onDone?.()
+        return
+      }
       const o = await placeOrder({ symbol, side, type, qty, price: type === 'market' ? undefined : Number(price) })
       if (o.status === 'working') toast('Order working', `${side.toUpperCase()} ${qty} ${symbol} ${type} @ ${o.price}`)
       await usePaper.getState().refresh()
@@ -38,6 +51,17 @@ export function OrderTicket({ symbol, side: initialSide, price: initialPrice, on
           <button key={t} className={type === t ? 'on' : ''} onClick={() => setType(t)}>{t}</button>
         ))}
       </div>
+      {ninja?.can_trade && (
+        <label>
+          Route
+          <select value={route} onChange={(e) => setRoute(e.target.value as 'paper' | 'ninja')}>
+            <option value="paper">Paper (simulated)</option>
+            <option value="ninja" disabled={!ninja.connected}>
+              NinjaTrader · {ninja.account}{ninja.connected ? '' : ' (bridge offline)'}
+            </option>
+          </select>
+        </label>
+      )}
       <label>Symbol <input value={symbol} readOnly /></label>
       <label>Qty <input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(Number(e.target.value))} /></label>
       {type !== 'market' && (
@@ -46,7 +70,9 @@ export function OrderTicket({ symbol, side: initialSide, price: initialPrice, on
       <button className={`ticket-go ${side}`} disabled={busy || qty <= 0 || (type !== 'market' && !price)} onClick={submit}>
         {side === 'buy' ? 'Buy' : 'Sell'} {qty} {symbol} {type === 'market' ? 'MKT' : `${type.toUpperCase()} ${price}`}
       </button>
-      <p className="muted small">Paper trading — simulated fills on the live feed.</p>
+      <p className="muted small">
+        {route === 'paper' ? 'Paper trading — simulated fills on the live feed.' : `Routed to NinjaTrader account ${ninja?.account}. Fills come back from NT8.`}
+      </p>
     </div>
   )
 }

@@ -102,6 +102,9 @@ export function wireUserEvents(): () => void {
         toast('Order filled', `${m.side.toUpperCase()} ${m.qty} ${m.symbol} @ ${m.price}`, 'success')
       }
       usePaper.getState().refresh().catch(() => {})
+    } else if (msg.type === 'broker') {
+      const bad = msg.state === 'Rejected' || !!msg.error
+      toast(`NinjaTrader: ${msg.state}`, msg.error || (msg.filled ? `filled ${msg.filled} @ ${msg.avg_price}` : `order ${msg.ref}`), bad ? 'error' : 'success')
     }
   })
   return () => {

@@ -57,7 +57,18 @@ export interface PaperMessage {
   [k: string]: unknown
 }
 
-export type UserMessage = AlertMessage | PaperMessage
+export interface BrokerMessage {
+  type: 'broker'
+  broker: 'ninja'
+  ref: string
+  order_id?: string
+  state: string
+  filled?: number
+  avg_price?: number
+  error?: string
+}
+
+export type UserMessage = AlertMessage | PaperMessage | BrokerMessage
 type Message = BarMessage | QuoteMessage | TradeMessage | BookMessage | UserMessage
 
 type Listener<T> = (msg: T) => void
@@ -175,6 +186,7 @@ class StreamManager {
         break
       case 'alert':
       case 'paper':
+      case 'broker':
         this.user.forEach((cb) => cb(msg))
         break
     }

@@ -1,14 +1,15 @@
 services:
-  server:
-    build: ./server
+  openterminal:
+    build: .
     ports:
-      - "8000:8000"
+      - "8000:8000"          # web app + API: http://localhost:8000
     volumes:
-      - ./data:/data
-      - ./server:/app
+      - ./data:/data         # candles (Parquet) + SQLite users/workspaces
+    env_file:
+      - path: server/.env    # copy server/.env.example; set OPENTERM_JWT_SECRET
+        required: false
     environment:
-      OPENTERM_DATA_DIR: /data
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-  # For local dev the web app runs via `npm run dev` (Vite proxies /api to :8000).
-  # Add a web container here when packaging for LAN deployment.
+      # The NT8 AddOn listens on the Windows host's loopback, which a container
+      # can't reach — run the server natively on the NT8 box for CME data.
+      OPENTERM_NINJA_ENABLED: "false"
+    restart: unless-stopped
