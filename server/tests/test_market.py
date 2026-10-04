@@ -196,11 +196,13 @@ def test_market_api(client_and_headers):
 
 @pytest.fixture()
 def client_and_headers():
+    import uuid
+
     from fastapi.testclient import TestClient
 
     from app.main import app
-    from tests.test_api import _auth_headers, _register_and_token
 
     with TestClient(app) as c:
-        yield c, _auth_headers(_register_and_token(c))
-
+        r = c.post("/api/auth/register", json={"username": f"mkt-{uuid.uuid4().hex[:8]}", "password": "secret123"})
+        assert r.status_code == 200, r.text
+        yield c, {"Authorization": f"Bearer {r.json()['access_token']}"}
