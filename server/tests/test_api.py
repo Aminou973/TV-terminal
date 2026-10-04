@@ -94,3 +94,80 @@ def test_ws_rejects_bad_token(client):
     with pytest.raises(Exception):
         with client.websocket_connect("/api/stream?token=garbage"):
             pass
+
+def test_symbols_listed_once(client):
+    token = _register_and_token(client)
+    names = [s["symbol"] for s in client.get("/api/symbols", headers=_auth_headers(token)).json()]
+    assert "SIM-ES" not in names
+    assert len(names) == len(set(names))
+
+
+def test_ws_survives_bad_messages_and_streams_trades_and_book(client):
+    token = _register_and_token(client)
+    with client.websocket_connect(f"/api/stream?token={token}") as ws:
+        ws.send_text("not json")
+        ws.send_json(["not", "a", "dict"])
+        ws.send_json({"action": "subscribe_trades", "symbol": "SIM:ES"})
+        ws.send_json({"action": "subscribe_book", "symbol": "SIM:ES"})
+        ws.send_json({"action": "subscribe", "symbol": "SIM:ES", "tf": "5m"})
+        seen = set()
+        for _ in range(200):
+            msg = json.loads(ws.receive_text())
+            seen.add(msg["type"])
+            if {"trade", "book", "bar"} <= seen:
+                break
+        assert {"trade", "book", "bar"} <= seen
+
+
+def test_workspace_crud(client):
+    h = _auth_headers(_register_and_token(client))
+    assert client.put("/api/watchlists", json={"name": "Main", "symbols": ["ES", "NQ"]}, headers=h).status_code == 200
+    assert client.get("/api/watchlists", headers=h).json()[0]["symbols"] == ["ES", "NQ"]
+    client.put("/api/layouts", json={"name": "Default", "spec": {"grid": "2x1"}}, headers=h)
+    assert client.get("/api/layouts", headers=h).json()[0]["spec"] == {"grid": "2x1"}
+    client.put("/api/drawings/SIM:ES", json={"data": [{"kind": "trend-line"}]}, headers=h)
+    assert client.get("/api/drawings/SIM:ES", headers=h).json()["data"] == [{"kind": "trend-line"}]
+    s = client.put("/api/scripts", json={"name": "My MA", "kind": "indicator", "source": "plot(close)"}, headers=h)
+    assert s.status_code == 200
+    assert client.delete(f"/api/scripts/{s.json()['id']}", headers=h).json() == {"ok": True}
+    # another user can't see them
+    other = _auth_headers(_register_and_token(client))
+    assert client.get("/api/watchlists", headers=other).json() == []
+
+
+def test_alerts_and_paper_api(client):
+    h = _auth_headers(_register_and_token(client))
+    a = client.post("/api/alerts", json={"symbol": "SIM:ES", "condition": "greater", "price": 1}, headers=h)
+    assert a.status_code == 200
+    with client.websocket_connect(f"/api/stream?token={h['Authorization'][7:]}") as ws:
+        for _ in range(100):
+            msg = json.loads(ws.receive_text())
+            if msg["type"] == "alert":
+                break
+        assert msg["type"] == "alert" and msg["symbol"] == "SIM:ES"
+    o = client.post("/api/paper/orders", json={"symbol": "SIM:ES", "side": "buy", "qty": 1}, headers=h)
+    assert o.status_code == 200 and o.json()["status"] == "filled"
+    acct = client.get("/api/paper/account", headers=h).json()
+    assert acct["positions"][0]["qty"] == 1
+    assert client.post("/api/paper/positions/SIM:ES/close", headers=h).status_code == 200
+    assert client.post("/api/paper/orders", json={"symbol": "SIM:ES", "side": "buy", "type": "limit", "qty": 1}, headers=h).status_code == 400
+
+
+def test_history_limit_stats_screener(client):
+    h = _auth_headers(_register_and_token(client))
+    r = client.get("/api/history", params={"symbol": "SIM:ES", "tf": "1m", "limit": 1}, headers=h)
+    assert len(r.json()["bars"]) == 1
+    st = client.get("/api/stats", params={"symbol": "SIM:ES"}, headers=h).json()
+    assert {"last", "change_pct", "high", "low"} <= set(st)
+    batch = client.get("/api/stats", params={"symbols": "SIM:ES,NOPE"}, headers=h).json()["stats"]
+    assert [b["symbol"] for b in batch] == ["SIM:ES"]
+    rows = client.get("/api/screener", headers=h).json()["rows"]
+    assert any(r["symbol"] == "SIM:ES" for r in rows)
+
+
+def test_ninja_routing_is_off_by_default(client):
+    h = _auth_headers(_register_and_token(client))
+    st = client.get("/api/broker/ninja/status", headers=h).json()
+    assert st["enabled"] is False and st["connected"] is False
+    r = client.post("/api/broker/ninja/orders", json={"symbol": "ES", "side": "buy", "qty": 1}, headers=h)
+    assert r.status_code in (400, 403)

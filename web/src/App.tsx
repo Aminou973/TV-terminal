@@ -1,73 +1,195 @@
-import { useEffect, useState } from 'react'
-import { getSymbols, type SymbolInfo } from './api/client'
-import { stream } from './chart/stream'
-import ChartView from './chart/ChartView'
+import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react'
+import ChartPane from './chart/ChartPane'
+import Dialogs from './dialogs/Dialogs'
+import DrawingToolbar from './DrawingToolbar'
 import LoginView from './auth/LoginView'
-import { useAuth, useTerminal, type Tf } from './store'
+import TopBar from './TopBar'
+import { requestNotifications, useAlerts, usePaper, useScripts, useSymbols, useToasts, wireUserEvents } from './data'
+import { Icon } from './icons'
+import AlertsPanel from './panels/AlertsPanel'
+import Depth from './panels/Depth'
+import Details from './panels/Details'
+import TradingPanel from './panels/TradingPanel'
+import Watchlist from './panels/Watchlist'
+import { GRID_PANES, useAuth, useTerminal, useUi, type BottomTab, type RightTab } from './store'
 
-const TFS: Tf[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1D']
+// heavy, rarely-open panels load on first use (CodeMirror, equity chart)
+const ScriptEditor = lazy(() => import('./panels/ScriptEditor'))
+const StrategyTester = lazy(() => import('./panels/StrategyTester'))
+const Screener = lazy(() => import('./panels/Screener'))
 
-function Terminal() {
-  const username = useAuth((s) => s.username)
-  const logout = useAuth((s) => s.logout)
-  const symbol = useTerminal((s) => s.symbol)
-  const tf = useTerminal((s) => s.tf)
-  const setSymbol = useTerminal((s) => s.setSymbol)
-  const setTf = useTerminal((s) => s.setTf)
+const RIGHT_TABS: { id: RightTab; title: string; icon: () => ReactNode }[] = [
+  { id: 'watchlist', title: 'Watchlist', icon: Icon.list },
+  { id: 'depth', title: 'Order book & trades', icon: Icon.depth },
+  { id: 'alerts', title: 'Alerts', icon: Icon.alert },
+  { id: 'details', title: 'Symbol details', icon: Icon.info },
+]
 
-  const [symbols, setSymbols] = useState<SymbolInfo[]>([])
-  const [prices, setPrices] = useState<Record<string, number>>({})
+const BOTTOM_TABS: { id: BottomTab; title: string; icon: () => ReactNode }[] = [
+  { id: 'editor', title: 'Script Editor', icon: Icon.code },
+  { id: 'tester', title: 'Strategy Tester', icon: Icon.flask },
+  { id: 'screener', title: 'Screener', icon: Icon.filter },
+  { id: 'trading', title: 'Trading Panel', icon: Icon.wallet },
+]
+
+function ChartGrid() {
+  const grid = useTerminal((s) => s.grid)
+  const n = GRID_PANES[grid]
+  return (
+    <div className={`chart-grid g${grid}`}>
+      {Array.from({ length: n }, (_, i) => (
+        <ChartPane key={i} index={i} />
+      ))}
+    </div>
+  )
+}
+
+function BottomPanel() {
+  const tab = useTerminal((s) => s.bottomTab)
+  const setTab = useTerminal((s) => s.setBottomTab)
+  const [height, setHeight] = useState(320)
+  const drag = useRef<{ y: number; h: number } | null>(null)
 
   useEffect(() => {
-    getSymbols().then(setSymbols).catch(() => {})
+    const move = (e: MouseEvent) => {
+      if (!drag.current) return
+      setHeight(Math.max(160, Math.min(window.innerHeight - 200, drag.current.h + drag.current.y - e.clientY)))
+    }
+    const up = () => (drag.current = null)
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+    return () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
   }, [])
 
+  return (
+    <div className="bottom" style={tab ? { height } : undefined}>
+      {tab && <div className="bottom-resize" onMouseDown={(e) => (drag.current = { y: e.clientY, h: height })} />}
+      <div className="bottom-tabs">
+        {BOTTOM_TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(tab === t.id ? null : t.id)}>
+            <t.icon /> {t.title}
+          </button>
+        ))}
+        <span className="spacer" />
+        {tab && (
+          <button className="icon-btn" onClick={() => setTab(null)} title="Collapse">
+            <Icon.x />
+          </button>
+        )}
+      </div>
+      {tab && (
+        <div className="bottom-body">
+          <Suspense fallback={<p className="muted pad">Loading…</p>}>
+            {tab === 'editor' && <ScriptEditor />}
+            {tab === 'tester' && <StrategyTester />}
+            {tab === 'screener' && <Screener />}
+            {tab === 'trading' && <TradingPanel />}
+          </Suspense>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RightPanel() {
+  const tab = useTerminal((s) => s.rightTab)
+  const setTab = useTerminal((s) => s.setRightTab)
+  return (
+    <>
+      {tab && (
+        <aside className="right">
+          {tab === 'watchlist' && <Watchlist />}
+          {tab === 'depth' && <Depth />}
+          {tab === 'alerts' && <AlertsPanel />}
+          {tab === 'details' && <Details />}
+        </aside>
+      )}
+      <nav className="rail">
+        {RIGHT_TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'on' : ''} title={t.title} onClick={() => setTab(tab === t.id ? null : t.id)}>
+            <t.icon />
+          </button>
+        ))}
+      </nav>
+    </>
+  )
+}
+
+function Toasts() {
+  const list = useToasts((s) => s.list)
+  const dismiss = useToasts((s) => s.dismiss)
+  return (
+    <div className="toasts" aria-live="polite">
+      {list.map((t) => (
+        <div key={t.id} className={`toast ${t.tone}`} onClick={() => dismiss(t.id)}>
+          <b>{t.title}</b>
+          {t.body && <span>{t.body}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Terminal() {
+  const theme = useTerminal((s) => s.theme)
+
   useEffect(() => {
-    if (symbols.length === 0) return
-    const off = stream.subscribeQuotes(
-      symbols.map((s) => s.symbol),
-      (q) => setPrices((p) => ({ ...p, [q.symbol]: q.last })),
-    )
-    return off
-  }, [symbols])
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  useEffect(() => {
+    const refreshSymbols = () => void useSymbols.getState().refresh().catch(() => {})
+    refreshSymbols()
+    void useAlerts.getState().refresh().catch(() => {})
+    void usePaper.getState().refresh().catch(() => {})
+    void useScripts.getState().refresh().catch(() => {})
+    const off = wireUserEvents()
+    requestNotifications()
+    const timer = setInterval(refreshSymbols, 30_000)
+    return () => {
+      off()
+      clearInterval(timer)
+    }
+  }, [])
+
+  // keyboard: "/" symbol search, Alt+A alert, Alt+I indicators
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement
+      if (el.closest('input, textarea, select, .cm-editor')) return
+      const ui = useUi.getState()
+      const pane = useTerminal.getState().panes[useTerminal.getState().active]
+      if (e.key === '/' && !ui.dialog) {
+        e.preventDefault()
+        ui.open({ kind: 'symbol' })
+      } else if (e.altKey && e.code === 'KeyA') {
+        e.preventDefault()
+        ui.open({ kind: 'alert', symbol: pane.symbol, price: NaN })
+      } else if (e.altKey && e.code === 'KeyI') {
+        e.preventDefault()
+        ui.open({ kind: 'indicators' })
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="terminal">
-      <header className="topbar">
-        <span className="logo">OpenTerminal</span>
-        <span className="symbol-p">{symbol}</span>
-        <nav className="tfs">
-          {TFS.map((t) => (
-            <button key={t} className={t === tf ? 'active' : ''} onClick={() => setTf(t)}>
-              {t}
-            </button>
-          ))}
-        </nav>
-        <span className="spacer" />
-        <span className="user">{username}</span>
-        <button className="link" onClick={logout}>
-          Sign out
-        </button>
-      </header>
+      <TopBar />
       <div className="body">
-        <aside className="watchlist">
-          <h3>Symbols</h3>
-          {symbols.map((s) => (
-            <button
-              key={s.symbol}
-              className={`sym ${s.symbol === symbol ? 'active' : ''}`}
-              onClick={() => setSymbol(s.symbol)}
-            >
-              <span>{s.symbol}</span>
-              <span className="px">{prices[s.symbol] != null ? prices[s.symbol].toFixed(2) : '—'}</span>
-            </button>
-          ))}
-          {symbols.length === 0 && <p className="muted">waiting for data…</p>}
-        </aside>
-        <main className="chart-area">
-          <ChartView />
-        </main>
+        <DrawingToolbar />
+        <div className="center">
+          <ChartGrid />
+          <BottomPanel />
+        </div>
+        <RightPanel />
       </div>
+      <Dialogs />
+      <Toasts />
     </div>
   )
 }

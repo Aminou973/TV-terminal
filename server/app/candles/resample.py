@@ -6,24 +6,30 @@ session-anchored (see sessions.py) so CME dailies match TradingView.
 
 from __future__ import annotations
 
-from app.candles.sessions import session_day_start_s
+from app.candles.sessions import session_day_start_s, session_period_start_s
 from app.models import Bar
 
 # tf id -> seconds (intraday); "1D" handled via session anchoring
 TF_SECONDS: dict[str, int] = {
     "1m": 60,
+    "3m": 180,
     "5m": 300,
     "15m": 900,
     "30m": 1800,
     "1h": 3600,
+    "2h": 7200,
     "4h": 14400,
     "1D": 86400,
+    "1W": 604800,
+    "1M": 2678400,  # nominal (31d) — only used to size history reads
 }
 
 
 def bucket_start_s(ts_s: int, tf: str, symbol: str) -> int:
     if tf == "1D":
         return session_day_start_s(ts_s, symbol)
+    if tf in ("1W", "1M"):
+        return session_period_start_s(ts_s, symbol, tf[1])
     secs = TF_SECONDS[tf]
     return (ts_s // secs) * secs
 

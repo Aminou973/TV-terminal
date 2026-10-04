@@ -16,6 +16,7 @@ class Tick:
     bid: float = 0.0
     ask: float = 0.0
     provider: str = ""
+    side: str = ""  # "buy" | "sell" | "" (aggressor side, when the feed knows it)
 
 
 @dataclass(slots=True)
@@ -62,3 +63,10 @@ class BarEvent:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+@dataclass(slots=True)
+class UserEvent:
+    """A message for one user's open WebSocket connections (alerts, orders)."""
+
+    user_id: int
+    payload: dict

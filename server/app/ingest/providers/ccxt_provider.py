@@ -74,6 +74,7 @@ class CcxtProvider:
                             price=float(t["price"]),
                             size=float(t.get("amount") or 0.0),
                             provider=self.name,
+                            side=t.get("side") or "",
                         )
                     )
                     # NOTE: since ccxt 4.5, watch_trades returns a fresh list of

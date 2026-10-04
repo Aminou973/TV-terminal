@@ -44,6 +44,65 @@ CREATE TABLE IF NOT EXISTS drawings (
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, symbol, tf)
 );
+CREATE TABLE IF NOT EXISTS scripts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'indicator',   -- indicator | strategy
+    source      TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, name)
+);
+CREATE TABLE IF NOT EXISTS alerts (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol       TEXT NOT NULL,
+    condition    TEXT NOT NULL,          -- crossing | crossing_up | crossing_down | greater | less
+    price        REAL NOT NULL,
+    message      TEXT NOT NULL DEFAULT '',
+    once         INTEGER NOT NULL DEFAULT 1,
+    active       INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    triggered_at TEXT
+);
+CREATE TABLE IF NOT EXISTS alert_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_id    INTEGER,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol      TEXT NOT NULL,
+    price       REAL NOT NULL,
+    message     TEXT NOT NULL,
+    ts_ms       INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS paper_accounts (
+    user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    starting_balance REAL NOT NULL,
+    realized_pnl     REAL NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS paper_orders (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol       TEXT NOT NULL,
+    side         TEXT NOT NULL,          -- buy | sell
+    type         TEXT NOT NULL,          -- market | limit | stop
+    qty          REAL NOT NULL,
+    price        REAL,                   -- limit / stop trigger price
+    status       TEXT NOT NULL,          -- working | filled | cancelled | rejected
+    fill_price   REAL,
+    created_ms   INTEGER NOT NULL,
+    filled_ms    INTEGER
+);
+CREATE TABLE IF NOT EXISTS paper_positions (
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol       TEXT NOT NULL,
+    qty          REAL NOT NULL,          -- signed: + long, - short
+    avg_price    REAL NOT NULL,
+    PRIMARY KEY (user_id, symbol)
+);
+CREATE TABLE IF NOT EXISTS kv (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
 """
 
 
@@ -68,7 +127,7 @@ class Database:
             self._conn = None
 
     # -- generic helpers ------------------------------------------------------
-    def execute(self, sql: str, params: tuple = ()) -> None:
+    def execute(self, sql: str, params: tuple = ()) -> int:
         with self._lock:
             cur = self._conn.execute(sql, params)
             self._conn.commit()
@@ -101,6 +160,17 @@ class Database:
 
     def all_users(self) -> list[dict]:
         return self.query_all("SELECT id, username, role, created_at FROM users ORDER BY id")
+
+    # -- key/value (server-side secrets such as broker tokens) ----------------
+    def kv_get(self, key: str) -> Optional[str]:
+        row = self.query_one("SELECT value FROM kv WHERE key = ?", (key,))
+        return row["value"] if row else None
+
+    def kv_set(self, key: str, value: str) -> None:
+        self.execute(
+            "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
 
 
 database = Database(settings.sqlite_path)
