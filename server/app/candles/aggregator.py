@@ -135,6 +135,28 @@ class CandleAggregator:
         self._maybe_push_forming(bar, tick.provider)
         self._maybe_push_quote(tick)
 
+    def process_bar(self, bar: Bar, provider: str = "") -> Tick:
+        """Bar-based feeds (polled 1m bars): replace the forming minute wholesale.
+
+        A bar for a later minute closes the previous one, exactly like a tick
+        would. Returns a synthetic tick at the bar's close for tick listeners
+        (alerts, paper fills).
+        """
+        current = self._forming.get(bar.symbol)
+        if current is not None and bar.time < current.time:
+            return Tick(bar.symbol, bar.time * 1000, bar.close, 0.0, provider=provider)  # stale
+        if current is not None and bar.time > current.time:
+            self._emit_closed(current, provider)
+        forming = Bar(bar.symbol, bar.time, bar.open, bar.high, bar.low, bar.close, bar.volume)
+        self._forming[bar.symbol] = forming
+        tick = Tick(bar.symbol, bar.time * 1000 + 59_000, bar.close, 0.0, provider=provider)
+        self.last_tick[bar.symbol] = tick
+        # every polled update matters (they are already ~15s apart): no throttle
+        self._last_push[bar.symbol] = time.monotonic()
+        self.bus.publish(BarEvent(bar=forming, tf="1m", closed=False, provider=provider))
+        self._maybe_push_quote(tick)
+        return tick
+
     def forming_bar(self, symbol: str) -> Optional[Bar]:
         return self._forming.get(symbol)
 

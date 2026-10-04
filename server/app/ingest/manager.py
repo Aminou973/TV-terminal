@@ -12,7 +12,8 @@ from app.config import Settings
 from app.ingest.providers.ccxt_provider import CcxtProvider
 from app.ingest.providers.ninja_tcp import NinjaTcpProvider
 from app.ingest.providers.sim import SimProvider
-from app.models import Tick, now_ms
+from app.ingest.providers.yfinance_provider import YFinanceProvider
+from app.models import Bar, Tick, now_ms
 from app.store.parquet import CandleParquetStore
 
 log = logging.getLogger("openterm.ingest")
@@ -25,7 +26,7 @@ class IngestManager:
         self.store = store
         self.aggregator = CandleAggregator(bus, throttle_s=settings.bar_throttle)
         self.aggregator.on_closed = store.append_bar
-        self.queue: asyncio.Queue[Tick] = asyncio.Queue(maxsize=10_000)
+        self.queue: asyncio.Queue[Tick | Bar] = asyncio.Queue(maxsize=10_000)
         self._tasks: list[asyncio.Task] = []
         self.provider_status: dict[str, str] = {}
         self.last_book: dict[str, BookEvent] = {}
@@ -49,6 +50,8 @@ class IngestManager:
                     on_bars=self._on_historical_bars,
                 )
             )
+        if self.settings.yf_enabled and self.settings.yf_tickers:
+            providers.append(YFinanceProvider(self.settings.yf_tickers, self.store, poll_s=self.settings.yf_poll_s))
         if self.settings.ccxt_enabled and self.settings.ccxt_symbols:
             providers.append(
                 CcxtProvider(self.settings.ccxt_exchange, self.settings.ccxt_symbols, self.store)
@@ -73,7 +76,10 @@ class IngestManager:
         """Run a provider forever; restart with backoff on unexpected death."""
         while True:
             try:
-                await provider.run(self._sink)
+                if getattr(provider, "accepts_bars", False):
+                    await provider.run(self._sink, self._bar_sink)
+                else:
+                    await provider.run(self._sink)
                 self.provider_status[provider.name] = "stopped"
                 log.info("provider %s stopped cleanly", provider.name)
             except asyncio.CancelledError:
@@ -90,15 +96,25 @@ class IngestManager:
             # drop the tick before we ever block a provider
             log.warning("ingest queue full; dropped tick for %s", tick.symbol)
 
+    async def _bar_sink(self, bar: Bar) -> None:
+        try:
+            self.queue.put_nowait(bar)
+        except asyncio.QueueFull:
+            log.warning("ingest queue full; dropped bar for %s", bar.symbol)
+
     async def _consume_loop(self) -> None:
         while True:
-            tick = await self.queue.get()
+            item = await self.queue.get()
             try:
-                self.aggregator.process_tick(tick)
+                if isinstance(item, Bar):
+                    tick = self.aggregator.process_bar(item, "bars")
+                else:
+                    tick = item
+                    self.aggregator.process_tick(tick)
                 for listener in self.tick_listeners:
                     listener(tick)
             except Exception:  # noqa: BLE001 — one bad tick must not stop the engine
-                log.exception("failed processing tick %s", tick)
+                log.exception("failed processing %s", item)
 
     def publish_book(self, symbol: str, bids: list, asks: list) -> None:
         """Providers call this with depth snapshots; throttled per symbol."""

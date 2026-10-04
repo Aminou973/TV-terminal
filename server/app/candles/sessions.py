@@ -34,7 +34,8 @@ _CONTRACT = re.compile(r"^([A-Z0-9]{1,4}?)[FGHJKMNQUVXZ]\d{1,2}$")
 def _root(symbol: str) -> str:
     """Instrument root: drops a 'FEED:' prefix and an NT8 ' 12-25' expiry."""
     s = symbol.upper().split(":")[-1]
-    return s.split(" ")[0].split(".")[0]
+    s = s.split(" ")[0].split(".")[0]
+    return s[:-2] if s.endswith("=F") else s  # Yahoo continuous futures: ES=F
 
 
 def market_class(symbol: str) -> str:
@@ -51,7 +52,7 @@ def market_class(symbol: str) -> str:
     m = _CONTRACT.match(root)
     if m and m.group(1) in CME_ROOTS:
         return "cme"
-    if root in CRYPTO_ROOTS or any(root.endswith(q) for q in CRYPTO_QUOTES):
+    if root.split("-")[0] in CRYPTO_ROOTS or any(root.endswith(q) for q in CRYPTO_QUOTES):
         return "crypto"
     return "stock"
 

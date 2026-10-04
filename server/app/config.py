@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     ccxt_exchange: str = "binance"
     ccxt_symbols: list[str] = ["BTC/USDT", "ETH/USDT"]
 
+    # stocks / ETFs / indices / futures / FX via yfinance (polled 1m bars, no key)
+    yf_enabled: bool = True
+    yf_tickers: list[str] = ["AAPL", "MSFT", "NVDA", "TSLA", "SPY", "QQQ", "ES=F", "NQ=F", "GC=F", "EURUSD=X"]
+    yf_poll_s: float = 15.0
+
     # -- streaming -----------------------------------------------------------
     # throttle for forming-bar updates pushed per symbol (seconds)
     bar_throttle: float = 0.2
