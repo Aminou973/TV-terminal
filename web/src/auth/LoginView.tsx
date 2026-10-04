@@ -19,7 +19,7 @@ export default function LoginView() {
         mode === 'login'
           ? await postLogin(username, password)
           : await postRegister(username, password)
-      login(res.access_token, res.username)
+      login(res.access_token, res.username, res.role)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong')
     } finally {

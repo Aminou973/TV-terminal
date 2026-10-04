@@ -23,7 +23,7 @@ class Runtime:
         self.ingest = IngestManager(settings, self.bus, self.store)
         self.service = CandleService(self.store, self.ingest)
         self.alerts = AlertEngine(database, self.bus)
-        self.paper = PaperEngine(database, self.bus)
+        self.paper = PaperEngine(database, self.bus, price_lookup=self.service.last_price)
         self.ingest.tick_listeners += [self.alerts.on_tick, self.paper.on_tick]
         self.flush_task = None
 

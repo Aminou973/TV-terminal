@@ -159,5 +159,7 @@ def test_history_limit_stats_screener(client):
     assert len(r.json()["bars"]) == 1
     st = client.get("/api/stats", params={"symbol": "SIM:ES"}, headers=h).json()
     assert {"last", "change_pct", "high", "low"} <= set(st)
+    batch = client.get("/api/stats", params={"symbols": "SIM:ES,NOPE"}, headers=h).json()["stats"]
+    assert [b["symbol"] for b in batch] == ["SIM:ES"]
     rows = client.get("/api/screener", headers=h).json()["rows"]
     assert any(r["symbol"] == "SIM:ES" for r in rows)

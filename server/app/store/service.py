@@ -65,11 +65,24 @@ class CandleService:
                 rows.append(m)
         return rows
 
+    def last_price(self, symbol: str) -> float | None:
+        """Live last trade, else the close of the newest stored 1m bar."""
+        tick = self.ingest.aggregator.last_tick.get(symbol)
+        if tick is not None:
+            return tick.price
+        bars = self.store.last_bars(symbol, 1)
+        return bars[-1].close if bars else None
+
     def quote(self, symbols: list[str]) -> list[dict]:
         out = []
         for sym in symbols:
             tick = self.ingest.aggregator.last_tick.get(sym)
             if tick is None:
+                # no live feed for it (yet): serve the last stored close, flagged stale
+                bars = self.store.last_bars(sym, 1)
+                if bars:
+                    b = bars[-1]
+                    out.append({"symbol": sym, "last": b.close, "bid": 0.0, "ask": 0.0, "ts_ms": b.time * 1000, "stale": True})
                 continue
             out.append(
                 {

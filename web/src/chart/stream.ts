@@ -2,8 +2,10 @@ import { useAuth } from '../store'
 import type { BarData } from '../api/client'
 
 // ---------------------------------------------------------------------------
-// Single WebSocket connection with ref-counted (symbol, tf) subscriptions.
-// Reconnects with backoff; on reconnect resubscribes everything.
+// Single WebSocket connection with ref-counted subscriptions (bars per
+// symbol|tf, quotes, trades and books per symbol) plus per-user events.
+// Reconnects with backoff and resubscribes everything; an auth rejection
+// (4401, e.g. an expired token) signs the user out instead of looping.
 // ---------------------------------------------------------------------------
 
 export interface BarMessage {
@@ -23,110 +25,236 @@ export interface QuoteMessage {
   ts_ms: number
 }
 
-type BarListener = (msg: BarMessage) => void
-type QuoteListener = (msg: QuoteMessage) => void
+export interface TradeMessage {
+  type: 'trade'
+  symbol: string
+  price: number
+  size: number
+  side: 'buy' | 'sell' | ''
+  ts_ms: number
+}
+
+export interface BookMessage {
+  type: 'book'
+  symbol: string
+  bids: [number, number][]
+  asks: [number, number][]
+  ts_ms: number
+}
+
+export interface AlertMessage {
+  type: 'alert'
+  id: number
+  symbol: string
+  price: number
+  message: string
+  ts_ms: number
+}
+
+export interface PaperMessage {
+  type: 'paper'
+  event: 'order' | 'fill' | 'cancel' | 'reset'
+  [k: string]: unknown
+}
+
+export type UserMessage = AlertMessage | PaperMessage
+type Message = BarMessage | QuoteMessage | TradeMessage | BookMessage | UserMessage
+
+type Listener<T> = (msg: T) => void
+
+class Channel<T> {
+  // key -> listeners
+  readonly map = new Map<string, Set<Listener<T>>>()
+
+  /** Returns true when this is the first listener for the key. */
+  add(key: string, cb: Listener<T>): boolean {
+    let set = this.map.get(key)
+    const first = !set || set.size === 0
+    if (!set) {
+      set = new Set()
+      this.map.set(key, set)
+    }
+    set.add(cb)
+    return first
+  }
+
+  /** Returns true when the key has no listeners left. */
+  remove(key: string, cb: Listener<T>): boolean {
+    const set = this.map.get(key)
+    if (!set) return false
+    set.delete(cb)
+    if (set.size === 0) {
+      this.map.delete(key)
+      return true
+    }
+    return false
+  }
+
+  emit(key: string, msg: T): void {
+    this.map.get(key)?.forEach((cb) => cb(msg))
+  }
+}
 
 class StreamManager {
   private ws: WebSocket | null = null
-  private barListeners = new Map<string, Set<BarListener>>() // "symbol|tf" -> listeners
-  private quoteListeners = new Map<string, Set<QuoteListener>>() // symbol -> listeners
+  private token: string | null = null
   private retryMs = 1000
-  private closing = false
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private bars = new Channel<BarMessage>()
+  private quotes = new Channel<QuoteMessage>()
+  private trades = new Channel<TradeMessage>()
+  private books = new Channel<BookMessage>()
+  private user = new Set<Listener<UserMessage>>()
+  private status = new Set<Listener<boolean>>()
+  connected = false
 
   private connect(): void {
-    if (this.closing) return
+    this.retryTimer = null
     const token = useAuth.getState().token
     if (!token) return
+    this.token = token
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/api/stream?token=${encodeURIComponent(token)}`)
     this.ws = ws
 
     ws.onopen = () => {
       this.retryMs = 1000
-      this.send({ action: 'subscribe_quotes', symbols: [...this.quoteListeners.keys()] })
-      for (const key of this.barListeners.keys()) {
-        const [symbol, tf] = key.split('|')
+      this.setConnected(true)
+      if (this.quotes.map.size) this.send({ action: 'subscribe_quotes', symbols: [...this.quotes.map.keys()] })
+      for (const key of this.bars.map.keys()) {
+        const [symbol, tf] = splitKey(key)
         this.send({ action: 'subscribe', symbol, tf })
       }
+      for (const s of this.trades.map.keys()) this.send({ action: 'subscribe_trades', symbol: s })
+      for (const s of this.books.map.keys()) this.send({ action: 'subscribe_book', symbol: s })
     }
-    ws.onmessage = (e) => this.dispatch(JSON.parse(e.data))
-    ws.onclose = () => {
-      if (this.closing) return
-      setTimeout(() => this.connect(), this.retryMs)
+    ws.onmessage = (e) => {
+      try {
+        this.dispatch(JSON.parse(e.data) as Message)
+      } catch (err) {
+        console.error('bad stream message', err)
+      }
+    }
+    ws.onclose = (e) => {
+      if (this.ws !== ws) return // superseded by a reconnect
+      this.ws = null
+      this.setConnected(false)
+      if (e.code === 4401) {
+        useAuth.getState().logout()
+        return
+      }
+      if (!useAuth.getState().token) return
+      this.retryTimer = setTimeout(() => this.connect(), this.retryMs)
       this.retryMs = Math.min(this.retryMs * 2, 15000)
     }
     ws.onerror = () => ws.close()
+  }
+
+  private setConnected(v: boolean) {
+    this.connected = v
+    this.status.forEach((cb) => cb(v))
   }
 
   private send(msg: unknown): void {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg))
   }
 
-  private dispatch(msg: BarMessage | QuoteMessage): void {
-    if (msg.type === 'bar') {
-      this.barListeners.get(`${msg.symbol}|${msg.tf}`)?.forEach((cb) => cb(msg))
-    } else if (msg.type === 'quote') {
-      this.quoteListeners.get(msg.symbol)?.forEach((cb) => cb(msg))
+  private dispatch(msg: Message): void {
+    switch (msg.type) {
+      case 'bar':
+        this.bars.emit(`${msg.symbol}|${msg.tf}`, msg)
+        break
+      case 'quote':
+        this.quotes.emit(msg.symbol, msg)
+        break
+      case 'trade':
+        this.trades.emit(msg.symbol, msg)
+        break
+      case 'book':
+        this.books.emit(msg.symbol, msg)
+        break
+      case 'alert':
+      case 'paper':
+        this.user.forEach((cb) => cb(msg))
+        break
     }
   }
 
   // -- public API ------------------------------------------------------------
   ensureConnected(): void {
-    if (!this.ws || this.ws.readyState === WebSocket.CLOSED) this.connect()
-  }
-
-  subscribeBars(symbol: string, tf: string, cb: BarListener): () => void {
-    const key = `${symbol}|${tf}`
-    let set = this.barListeners.get(key)
-    const first = !set || set.size === 0
-    if (!set) {
-      set = new Set()
-      this.barListeners.set(key, set)
-    }
-    set.add(cb)
-    this.ensureConnected()
-    if (first) this.send({ action: 'subscribe', symbol, tf })
-    return () => {
-      const s = this.barListeners.get(key)
-      if (!s) return
-      s.delete(cb)
-      if (s.size === 0) {
-        this.barListeners.delete(key)
-        this.send({ action: 'unsubscribe', symbol, tf })
-      }
-    }
-  }
-
-  subscribeQuotes(symbols: string[], cb: QuoteListener): () => void {
-    let added = false
-    for (const sym of symbols) {
-      let set = this.quoteListeners.get(sym)
-      if (!set) {
-        set = new Set()
-        this.quoteListeners.set(sym, set)
-        added = true
-      }
-      set.add(cb)
-    }
-    this.ensureConnected()
-    if (added) this.send({ action: 'subscribe_quotes', symbols })
-    return () => {
-      for (const sym of symbols) {
-        const s = this.quoteListeners.get(sym)
-        if (!s) continue
-        s.delete(cb)
-        if (s.size === 0) this.quoteListeners.delete(sym)
-      }
-    }
+    const token = useAuth.getState().token
+    if (this.ws && token !== this.token) this.disconnect() // signed in as someone else
+    if (!this.ws && !this.retryTimer) this.connect()
   }
 
   disconnect(): void {
-    this.closing = true
-    this.ws?.close()
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    this.retryTimer = null
+    const ws = this.ws
+    this.ws = null
+    ws?.close()
+    this.setConnected(false)
   }
+
+  subscribeBars(symbol: string, tf: string, cb: Listener<BarMessage>): () => void {
+    const key = `${symbol}|${tf}`
+    this.ensureConnected()
+    if (this.bars.add(key, cb)) this.send({ action: 'subscribe', symbol, tf })
+    return () => {
+      if (this.bars.remove(key, cb)) this.send({ action: 'unsubscribe', symbol, tf })
+    }
+  }
+
+  subscribeQuotes(symbols: string[], cb: Listener<QuoteMessage>): () => void {
+    this.ensureConnected()
+    const added = symbols.filter((s) => this.quotes.add(s, cb))
+    if (added.length) this.send({ action: 'subscribe_quotes', symbols: added })
+    return () => {
+      const gone = symbols.filter((s) => this.quotes.remove(s, cb))
+      if (gone.length) this.send({ action: 'unsubscribe_quotes', symbols: gone })
+    }
+  }
+
+  subscribeTrades(symbol: string, cb: Listener<TradeMessage>): () => void {
+    this.ensureConnected()
+    if (this.trades.add(symbol, cb)) this.send({ action: 'subscribe_trades', symbol })
+    return () => {
+      if (this.trades.remove(symbol, cb)) this.send({ action: 'unsubscribe_trades', symbol })
+    }
+  }
+
+  subscribeBook(symbol: string, cb: Listener<BookMessage>): () => void {
+    this.ensureConnected()
+    if (this.books.add(symbol, cb)) this.send({ action: 'subscribe_book', symbol })
+    return () => {
+      if (this.books.remove(symbol, cb)) this.send({ action: 'unsubscribe_book', symbol })
+    }
+  }
+
+  onUser(cb: Listener<UserMessage>): () => void {
+    this.ensureConnected()
+    this.user.add(cb)
+    return () => this.user.delete(cb)
+  }
+
+  onStatus(cb: Listener<boolean>): () => void {
+    this.status.add(cb)
+    cb(this.connected)
+    return () => this.status.delete(cb)
+  }
+}
+
+// symbols may contain '|'-free names only; tf never contains '|'
+function splitKey(key: string): [string, string] {
+  const i = key.lastIndexOf('|')
+  return [key.slice(0, i), key.slice(i + 1)]
 }
 
 export const stream = new StreamManager()
 
-// re-export the Quote type for convenience
+// sign-out tears the socket down so the next user gets a fresh connection
+useAuth.subscribe((s, prev) => {
+  if (!s.token && prev.token) stream.disconnect()
+})
+
 export type { Quote } from '../api/client'

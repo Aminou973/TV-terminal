@@ -67,8 +67,18 @@ async def quote(symbols: str = Query(...), user: dict = Depends(get_current_user
     return {"quotes": rt.service.quote(syms)}
 
 @router.get("/stats")
-async def stats(symbol: str = Query(...), user: dict = Depends(get_current_user)):
+async def stats(
+    symbol: str | None = Query(None),
+    symbols: str | None = Query(None, description="comma-separated; returns {stats: [...]}"),
+    user: dict = Depends(get_current_user),
+):
     rt = require_runtime()
+    if symbols is not None:
+        syms = [s.strip() for s in symbols.split(",") if s.strip()][:200]
+        rows = await asyncio.to_thread(lambda: [rt.service.stats(s) for s in syms])
+        return {"stats": [r for r in rows if r is not None]}
+    if not symbol:
+        raise HTTPException(status_code=400, detail="pass symbol or symbols")
     out = await asyncio.to_thread(rt.service.stats, symbol)
     if out is None:
         raise HTTPException(status_code=404, detail="no data for symbol")

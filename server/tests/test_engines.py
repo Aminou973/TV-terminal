@@ -98,3 +98,10 @@ def test_paper_flip_and_cancel(db):
 
 def test_point_values():
     assert point_value("ES") == 50 and point_value("SIM:ES") == 50 and point_value("AAPL") == 1
+
+
+def test_paper_market_uses_price_lookup_without_live_tick(db):
+    eng = PaperEngine(db, EventBus(), price_lookup=lambda s: 42.0 if s == "OLD" else None)
+    o = eng.place(1, "OLD", "buy", "market", 1, None)
+    assert o["status"] == "filled" and o["fill_price"] == 42.0
+    assert eng.positions(1)[0]["last"] == 42.0

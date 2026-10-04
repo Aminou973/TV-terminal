@@ -124,3 +124,16 @@ def _drain(q):
         except asyncio.QueueEmpty:
             break
     return out
+
+def test_weekly_and_monthly_buckets():
+    from datetime import datetime, timezone
+
+    from app.candles.resample import bucket_start_s
+
+    wed = int(datetime(2026, 10, 7, 12, tzinfo=timezone.utc).timestamp())
+    mon = int(datetime(2026, 10, 5, tzinfo=timezone.utc).timestamp())
+    assert bucket_start_s(wed, "1W", "BINANCE-BTCUSDT") == mon
+    assert bucket_start_s(wed, "1M", "BINANCE-BTCUSDT") == int(datetime(2026, 10, 1, tzinfo=timezone.utc).timestamp())
+    # CME Sunday 18:00 CT belongs to Monday's session → same week as Wednesday
+    sun_eve = int(datetime(2026, 10, 4, 23, tzinfo=timezone.utc).timestamp())
+    assert bucket_start_s(sun_eve, "1W", "ES") == bucket_start_s(wed, "1W", "ES")

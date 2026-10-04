@@ -8,7 +8,7 @@ so a tick at 23:30 ET Monday belongs to *Tuesday's* trading day.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 CHICAGO = ZoneInfo("America/Chicago")
@@ -90,3 +90,24 @@ def session_open_s(ts_s: int, symbol: str) -> int:
         opened = datetime.fromtimestamp(label, tz=CHICAGO) - timedelta(days=1)
         return int(opened.replace(hour=17).timestamp())
     return label
+
+
+def _tz(symbol: str):
+    market = market_class(symbol)
+    return {"cme": CHICAGO, "india": KOLKATA, "crypto": timezone.utc}.get(market, NEW_YORK)
+
+
+def session_period_start_s(ts_s: int, symbol: str, period: str) -> int:
+    """Label of the trading week ('W', starts Monday) or month ('M') containing `ts_s`.
+
+    Built on the daily label, so a CME Sunday-evening session counts in the
+    week of the Monday it trades for.
+    """
+    day_label = session_day_start_s(ts_s, symbol)
+    tz = _tz(symbol)
+    d = datetime.fromtimestamp(day_label, tz=tz)
+    if period == "W":
+        d = d - timedelta(days=d.weekday())
+    else:
+        d = d.replace(day=1)
+    return int(d.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())

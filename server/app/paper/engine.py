@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
+from typing import Callable, Optional
 
 from app.candles.bus import EventBus
 from app.candles.sessions import _root
@@ -44,9 +44,11 @@ class PaperError(ValueError):
 
 
 class PaperEngine:
-    def __init__(self, db: Database, bus: EventBus):
+    def __init__(self, db: Database, bus: EventBus, price_lookup: Optional[Callable[[str], Optional[float]]] = None):
         self.db = db
         self.bus = bus
+        # fallback for symbols without a live tick (e.g. a closed market): last stored close
+        self.price_lookup = price_lookup
         self.last: dict[str, float] = {}
         self._working: dict[str, list[dict]] = {}  # symbol -> working orders
         self._lock = threading.Lock()  # REST threads + the tick loop both fill
@@ -101,7 +103,11 @@ class PaperEngine:
         )
         out = []
         for r in rows:
-            last = self.last.get(r["symbol"], r["avg_price"])
+            last = self.last.get(r["symbol"])
+            if last is None and self.price_lookup is not None:
+                last = self.price_lookup(r["symbol"])
+            if last is None:
+                last = r["avg_price"]
             pv = point_value(r["symbol"])
             out.append(
                 {
@@ -129,6 +135,8 @@ class PaperEngine:
         if type_ != "market" and (price is None or price <= 0):
             raise PaperError(f"{type_} orders need a price")
         last = self.last.get(symbol)
+        if last is None and self.price_lookup is not None:
+            last = self.price_lookup(symbol)
         if type_ == "market" and last is None:
             raise PaperError(f"no live price for {symbol} yet")
 
