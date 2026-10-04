@@ -35,6 +35,7 @@ import {
 } from '../store'
 import { resolveIndicator } from './catalog'
 import ChartMenu, { type MenuState } from './ChartMenu'
+import EventMarkers from './EventMarkers'
 import OrderOverlay, { TradeButtons } from './OrderOverlay'
 import { sourceFor } from './datasource'
 import { IndicatorLayer, indicatorLabel } from './indicators'
@@ -926,6 +927,9 @@ export default function ChartPane({ index }: { index: number }) {
       onContextMenu={onContextMenu}
     >
       <div ref={containerRef} className="chart-canvas" />
+      {settings.events && !source.synthetic && !timeless && (
+        <EventMarkers series={mainRef.current} symbol={pane.symbol} generation={generation} dataVersion={dataVersion} getBars={getBarsForMarkers} />
+      )}
       {!source.synthetic && replay == null && (
         <OrderOverlay
           chart={chartRef.current}
@@ -955,7 +959,7 @@ export default function ChartPane({ index }: { index: number }) {
           )}
           {loading && <span className="legend-loading">loading…</span>}
         </div>
-        {settings.tradeButtons && !source.synthetic && replay == null && <TradeButtons symbol={pane.symbol} />}
+        {settings.tradeButtons && !source.synthetic && replay == null && <TradeButtons symbol={pane.symbol} fallback={barsRef.current[barsRef.current.length - 1]?.close ?? null} />}
         {(pane.compares ?? []).map((sym, i) => (
             <div key={sym} className="legend-row ind">
               <span className="legend-name" style={{ color: COMPARE_COLORS[i % COMPARE_COLORS.length] }}>{sym}</span>

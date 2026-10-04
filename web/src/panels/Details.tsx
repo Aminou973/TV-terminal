@@ -3,6 +3,7 @@ import { getStats, type Stats } from '../api/client'
 import { stream } from '../chart/stream'
 import { useSymbols } from '../data'
 import { useTerminal } from '../store'
+import Fundamentals from './Fundamentals'
 
 const digits = (v: number) => (Math.abs(v) < 1 ? 5 : Math.abs(v) < 10 ? 4 : 2)
 
@@ -67,6 +68,7 @@ export default function Details() {
         </>
       )}
       {!st && <p className="muted pad">No session data yet.</p>}
+      <Fundamentals symbol={symbol} />
     </div>
   )
 }

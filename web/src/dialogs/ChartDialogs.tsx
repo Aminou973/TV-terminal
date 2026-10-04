@@ -68,6 +68,7 @@ export function ChartSettingsDialog({ onClose }: { onClose: () => void }) {
             <label><span>Down colour</span><ColorField value={s.downColor} onChange={(v) => set({ downColor: v })} /></label>
             <label><span>Countdown to bar close</span><input type="checkbox" checked={s.countdown} onChange={(e) => set({ countdown: e.target.checked })} /></label>
             <label><span>Previous close line</span><input type="checkbox" checked={s.prevClose} onChange={(e) => set({ prevClose: e.target.checked })} /></label>
+            <label><span>Earnings, dividends &amp; splits</span><input type="checkbox" checked={s.events} onChange={(e) => set({ events: e.target.checked })} /></label>
           </>
         )}
         {tab === 'scales' && (

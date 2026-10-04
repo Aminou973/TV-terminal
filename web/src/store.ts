@@ -103,12 +103,14 @@ export interface ChartSettings {
   trading: boolean
   tradeButtons: boolean
   executions: boolean
+  /** earnings / dividend / split markers */
+  events: boolean
 }
 
 export const DEFAULT_SETTINGS: ChartSettings = {
   scale: 'normal', invert: false, upColor: '#089981', downColor: '#f23645', grid: true, volume: true,
   timezone: 'exchange', countdown: true, prevClose: false, sessionBreaks: false, box: 0, reversal: 3, lineBreak: 3,
-  trading: true, tradeButtons: true, executions: true,
+  trading: true, tradeButtons: true, executions: true, events: true,
 }
 
 export const paneSettings = (p: PaneState): ChartSettings => ({ ...DEFAULT_SETTINGS, ...p.settings })
@@ -142,8 +144,8 @@ export interface LayoutSpec {
   syncCrosshair: boolean
 }
 
-export type RightTab = 'watchlist' | 'depth' | 'dom' | 'alerts' | 'details' | 'objects' | 'data'
-export type BottomTab = 'editor' | 'tester' | 'screener' | 'trading' | 'journal'
+export type RightTab = 'watchlist' | 'depth' | 'dom' | 'news' | 'alerts' | 'details' | 'objects' | 'data'
+export type BottomTab = 'editor' | 'tester' | 'screener' | 'markets' | 'trading' | 'journal'
 
 export interface ReplayState {
   paneId: string

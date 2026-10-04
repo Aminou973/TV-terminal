@@ -35,11 +35,14 @@ const StrategyTester = lazy(() => import('./panels/StrategyTester'))
 const Screener = lazy(() => import('./panels/Screener'))
 const Journal = lazy(() => import('./panels/Journal'))
 const Dom = lazy(() => import('./panels/Dom'))
+const News = lazy(() => import('./panels/News'))
+const Markets = lazy(() => import('./panels/Markets'))
 
 const RIGHT_TABS: { id: RightTab; title: string; icon: () => ReactNode }[] = [
   { id: 'watchlist', title: 'Watchlist', icon: Icon.list },
   { id: 'depth', title: 'Order book & trades', icon: Icon.depth },
   { id: 'dom', title: 'DOM (price ladder)', icon: Icon.ladder },
+  { id: 'news', title: 'News', icon: Icon.news },
   { id: 'alerts', title: 'Alerts', icon: Icon.alert },
   { id: 'details', title: 'Symbol details', icon: Icon.info },
   { id: 'objects', title: 'Object tree', icon: Icon.tree },
@@ -50,6 +53,7 @@ const BOTTOM_TABS: { id: BottomTab; title: string; icon: () => ReactNode }[] = [
   { id: 'editor', title: 'Script Editor', icon: Icon.code },
   { id: 'tester', title: 'Strategy Tester', icon: Icon.flask },
   { id: 'screener', title: 'Screener', icon: Icon.filter },
+  { id: 'markets', title: 'Markets', icon: Icon.globe },
   { id: 'trading', title: 'Trading Panel', icon: Icon.wallet },
   { id: 'journal', title: 'Trade Journal', icon: Icon.journal },
 ]
@@ -88,7 +92,15 @@ function BottomPanel() {
 
   return (
     <div className="bottom" style={tab ? { height } : undefined}>
-      {tab && <div className="bottom-resize" onMouseDown={(e) => (drag.current = { y: e.clientY, h: height })} />}
+      {tab && (
+        <div
+          className="bottom-resize"
+          onMouseDown={(e) => {
+            e.preventDefault() // don't start a text selection while resizing
+            drag.current = { y: e.clientY, h: height }
+          }}
+        />
+      )}
       <div className="bottom-tabs">
         {BOTTOM_TABS.map((t) => (
           <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(tab === t.id ? null : t.id)}>
@@ -110,6 +122,7 @@ function BottomPanel() {
             {tab === 'screener' && <Screener />}
             {tab === 'trading' && <TradingPanel />}
             {tab === 'journal' && <Journal />}
+            {tab === 'markets' && <Markets />}
           </Suspense>
         </div>
       )}
@@ -126,9 +139,9 @@ function RightPanel() {
         <aside className="right">
           {tab === 'watchlist' && <Watchlist />}
           {tab === 'depth' && <Depth />}
-          {tab === 'dom' && (
+          {(tab === 'dom' || tab === 'news') && (
             <Suspense fallback={<p className="muted pad">Loading…</p>}>
-              <Dom />
+              {tab === 'dom' ? <Dom /> : <News />}
             </Suspense>
           )}
           {tab === 'alerts' && <AlertsPanel />}

@@ -54,11 +54,12 @@ const act = (p: Promise<unknown>, ok?: string) =>
     .finally(() => usePaper.getState().refresh().catch(() => {}))
 
 /** One-click market Buy / Sell at the ATM size (and brackets), shown in the chart legend. */
-export function TradeButtons({ symbol }: { symbol: string }) {
+export function TradeButtons({ symbol, fallback }: { symbol: string; fallback?: number | null }) {
   const atm = useAtm()
   const quote = useQuote(symbol)
   const positions = usePaper((s) => s.positions)
-  const last = quote.last ?? positions.find((p) => p.symbol === symbol)?.last ?? null
+  // symbols without a quote stream (e.g. replayed demo data) price off the chart's last close
+  const last = quote.last ?? positions.find((p) => p.symbol === symbol)?.last ?? fallback ?? null
   const tick = tickSize(symbol, last)
   const digits = tickDigits(tick)
   const oneClick = (side: Side) => {

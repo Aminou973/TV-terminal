@@ -44,6 +44,8 @@ export const Icon = {
   filter: () => <I><path d="M3 5h18l-7 8v6l-4-2v-4z" /></I>,
   ladder: () => <I><path d="M6 3v18M18 3v18M6 7h12M6 12h12M6 17h12" /></I>,
   journal: () => <I><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M9 9h6M9 13h6" /></I>,
+  news: () => <I><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></I>,
+  globe: () => <I><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></I>,
   wallet: () => <I><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M16 15h2" /></I>,
   plus: () => <I><path d="M12 5v14M5 12h14" /></I>,
   x: () => <I><path d="M6 6l12 12M18 6L6 18" /></I>,

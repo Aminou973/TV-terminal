@@ -396,3 +396,104 @@ export const postLogin = (username: string, password: string) => {
     return (await res.json()) as AuthResponse
   })
 }
+
+// ---------------------------------------------------------------- market ----
+export type MarketSource = 'live' | 'demo'
+
+export interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  publisher: string
+  url: string
+  time: number | null
+  thumbnail: string | null
+  tickers: string[]
+}
+
+export interface EarningsPoint {
+  time: number
+  eps_estimate: number | null
+  eps_actual: number | null
+  surprise_pct: number | null
+}
+
+export interface Fundamentals {
+  symbol: string
+  yahoo: string
+  source: MarketSource
+  name?: string | null
+  short_name?: string | null
+  sector?: string | null
+  industry?: string | null
+  country?: string | null
+  website?: string | null
+  summary?: string | null
+  currency?: string | null
+  exchange?: string | null
+  quote_type?: string | null
+  employees?: number | null
+  recommendation?: string | null
+  next_earnings?: number | null
+  earnings?: EarningsPoint[]
+  [key: string]: unknown
+}
+
+export interface MarketEvent {
+  time: number
+  kind: 'earnings' | 'dividend' | 'split'
+  value: number | null
+  label: string
+  upcoming?: boolean
+}
+
+export interface QuoteRow {
+  symbol: string
+  name: string
+  last: number
+  prev_close: number | null
+  change: number | null
+  change_pct: number | null
+  volume: number | null
+  spark: number[]
+}
+
+export interface HeatTile {
+  symbol: string
+  name: string
+  sector: string
+  market_cap: number
+  last: number
+  change_pct: number | null
+  volume: number | null
+}
+
+export interface EconEvent {
+  time: number
+  country: string
+  title: string
+  impact: 'high' | 'medium' | 'low' | 'holiday'
+  actual: string | null
+  forecast: string | null
+  previous: string | null
+}
+
+export interface EarningsRow {
+  symbol: string
+  name: string
+  time: number
+  eps_estimate: number | null
+  revenue_estimate: number | null
+}
+
+export const getNews = (symbol?: string) =>
+  api<{ symbol: string | null; source: MarketSource; items: NewsItem[] }>(`/market/news${symbol ? `?symbol=${enc(symbol)}` : ''}`)
+export const getFundamentals = (symbol: string) => api<Fundamentals>(`/market/fundamentals?symbol=${enc(symbol)}`)
+export const getMarketEvents = (symbol: string) =>
+  api<{ symbol: string; source: MarketSource; events: MarketEvent[] }>(`/market/events?symbol=${enc(symbol)}`)
+export const getOverview = () =>
+  api<{ source: MarketSource; groups: { name: string; rows: QuoteRow[] }[]; gainers: HeatTile[]; losers: HeatTile[]; active: HeatTile[] }>('/market/overview')
+export const getHeatmap = () => api<{ source: MarketSource; tiles: HeatTile[] }>('/market/heatmap')
+export const getEconCalendar = () => api<{ source: MarketSource; rows: EconEvent[] }>('/market/calendar')
+export const getEarningsCalendar = (symbols: string[]) =>
+  api<{ source: MarketSource; rows: EarningsRow[] }>(`/market/earnings?symbols=${enc(symbols.join(','))}`)

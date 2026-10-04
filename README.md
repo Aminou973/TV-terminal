@@ -19,6 +19,7 @@ A self-hosted, open-source TradingView-style trading terminal. CME futures from 
 | **Alerts** | Server-side alerts on price, trend lines (right-click a line), indicator vs indicator/value (RSI, MACD, BB, SMA/EMA, Stoch, CCI, volume) and OpenScript `alertcondition()` / strategy fills. Crossing / up / down / greater / less, trigger once · once per bar · once per bar close · once per minute · every time, expiry, `{{ticker}}`/`{{close}}`/`{{strategy.order.action}}` message placeholders → toast, browser notification, log, **webhook** (JSON passthrough), **Telegram**, **email** |
 | **Trading** | Paper trading on the live feed: market, limit, stop, stop-limit and trailing-stop orders · take-profit / stop-loss brackets (OCO, reduce-only) · drag orders, brackets and position TP/SL on the chart · one-click Buy/Sell in the chart legend · DOM price ladder (click to trade, drag to move, ATM brackets, volume at price) · reverse, flatten all, cancel all · risk-% sizing · commission · execution markers · optional order routing to NinjaTrader 8 |
 | **Trade journal** | Every flat → position → flat round trip with entry/exit, hold time, P&L net of commission, MAE / MFE, notes and tags · win rate, profit factor, expectancy, drawdown, streaks, equity curve · breakdown by symbol, side, tag, weekday and hour · CSV export |
+| **Market data** | Market overview (indices, futures, FX, crypto, rates, top movers) · stock heatmap by sector, sized by market cap · economic calendar (Forex Factory) with impact / currency filters · earnings calendar · headlines per symbol or market · fundamentals (valuation, margins, growth, analyst targets, EPS history) · earnings / dividend / split markers on the chart. Live from Yahoo Finance via yfinance, no key; served as clearly-labelled demo data when the sources are off or unreachable |
 | **Market panels** | Watchlists, order book + time & sales, symbol details |
 | **App** | Multi-user (JWT), layouts/watchlists/drawings/scripts stored per user, installable PWA, single Docker image |
 
@@ -111,6 +112,7 @@ Tests: `cd server && pytest` · `cd web && npm test`.
 - `/api/watchlists` · `/api/layouts` · `/api/drawings/{symbol}` · `/api/scripts`
 - `/api/alerts` (+ `/{id}` PUT/PATCH/DELETE, `/log`, `/catalog`, `/settings`, `/test`)
 - `/api/paper/account` · `/orders` (POST, `DELETE` all, `/{id}` PATCH/DELETE) · `/positions/{s}/{close,reverse,brackets}` · `/flatten` · `/trades` (+ `/{id}` PATCH notes/tags) · `/instrument` · `/settings` · `/reset`
+- `/api/market/{news,fundamentals,events,overview,heatmap,calendar,earnings,status}`
 - `/api/broker/ninja/{status,orders}`
 
 ## Legal notes
