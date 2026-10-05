@@ -24,6 +24,8 @@ plot(ta.sma(r, 14), 'RSI MA', '#FDD835', { width: 1 })
 hline(70, 'Overbought', '#F23645')
 hline(30, 'Oversold', '#089981')
 plotshape(ta.crossover(r, 30), { location: 'below', color: '#089981', text: 'OS' })
+alertcondition(ta.crossover(r, 30), 'RSI leaves oversold', '{{ticker}} RSI crossed above 30 at {{close}}')
+alertcondition(ta.crossunder(r, 70), 'RSI leaves overbought', '{{ticker}} RSI crossed below 70 at {{close}}')
 `,
   },
   {
@@ -99,4 +101,5 @@ ta.sma ema rma wma stdev highest lowest change mom roc sum rsi macd bb tr atr st
 ta.crossover/crossunder(a,b) → bool[] · ta.crossedUp/crossedDown(a,b,i) → bool
 strategy({initialCapital, qty, commissionPct, pointValue, fillOnClose}) · strategy.onBar(i => …)
 strategy.entry(id, 'long'|'short', {qty, sl, tp}) · strategy.close(id?) · strategy.closeAll() · strategy.position()
+alertcondition(boolArray, title, message) — server-side alerts can watch it
 log(...) · nz(v, d) · na · math`

@@ -116,17 +116,61 @@ export interface Script {
 }
 
 export type AlertCondition = 'crossing' | 'crossing_up' | 'crossing_down' | 'greater' | 'less'
+export type AlertKind = 'price' | 'line' | 'indicator' | 'script'
+export type AlertFrequency = 'once' | 'once_per_bar' | 'once_per_bar_close' | 'once_per_minute' | 'every_time'
+
+/** {"ind": "rsi", "length": 14, "output": "value"} or {"value": 70} */
+export type SeriesSpec = Record<string, string | number>
+
+export interface AlertNotify {
+  webhook?: string | boolean
+  telegram?: boolean
+  email?: boolean
+}
 
 export interface Alert {
   id: number
   symbol: string
+  kind: AlertKind
   condition: AlertCondition
   price: number
+  params: Record<string, unknown>
+  tf: string
+  frequency: AlertFrequency
+  expires_ms: number | null
+  notify: AlertNotify
   message: string
   once: number
   active: number
   created_at: string
   triggered_at: string | null
+  error: string | null
+}
+
+export interface AlertIn {
+  symbol: string
+  kind?: AlertKind
+  condition: AlertCondition
+  price?: number
+  params?: Record<string, unknown>
+  tf?: string
+  frequency?: AlertFrequency
+  expires_ms?: number | null
+  message?: string
+  notify?: AlertNotify
+}
+
+export interface AlertCatalog {
+  indicators: { id: string; label: string; outputs: string[]; params: Record<string, string | number> }[]
+  email_available: boolean
+  telegram_default_bot: boolean
+}
+
+export interface NotifySettings {
+  webhook_url: string
+  telegram_bot_token: string
+  telegram_chat_id: string
+  email: string
 }
 
 export interface AlertLogEntry {
@@ -136,11 +180,13 @@ export interface AlertLogEntry {
   price: number
   message: string
   ts_ms: number
+  delivery: string
 }
 
 export interface PaperAccount {
   starting_balance: number
   realized_pnl: number
+  commission: number
   balance: number
   unrealized_pnl: number
   equity: number
@@ -153,19 +199,87 @@ export interface PaperPosition {
   last: number
   point_value: number
   unrealized_pnl: number
+  tp: number | null
+  sl: number | null
 }
+
+export type OrderType = 'market' | 'limit' | 'stop' | 'stop_limit' | 'trailing_stop'
 
 export interface PaperOrder {
   id: number
   symbol: string
   side: 'buy' | 'sell'
-  type: 'market' | 'limit' | 'stop'
+  type: OrderType
   qty: number
   price: number | null
+  stop_price: number | null
+  trail: number | null
+  trail_ref: number | null
+  triggered: number
+  parent_id: number | null
+  oco: string | null
+  reduce_only: number
+  tag: '' | 'entry' | 'tp' | 'sl' | 'close' | 'reverse'
+  tp: number | null
+  sl: number | null
+  reason: string | null
   status: 'working' | 'filled' | 'cancelled' | 'rejected'
   fill_price: number | null
   created_ms: number
   filled_ms: number | null
+}
+
+export interface OrderIn {
+  symbol: string
+  side: 'buy' | 'sell'
+  type: OrderType
+  qty: number
+  price?: number
+  stop_price?: number
+  trail?: number
+  tp?: number
+  sl?: number
+  reduce_only?: boolean
+}
+
+export interface OrderModify {
+  price?: number
+  qty?: number
+  stop_price?: number
+  trail?: number
+  tp?: number
+  sl?: number
+  clear_tp?: boolean
+  clear_sl?: boolean
+}
+
+export interface PaperTrade {
+  id: number
+  symbol: string
+  side: 'long' | 'short'
+  qty: number
+  entry_price: number
+  exit_price: number | null
+  exit_qty: number
+  entry_ms: number
+  exit_ms: number | null
+  pnl: number
+  commission: number
+  high: number
+  low: number
+  mfe: number
+  mae: number
+  point_value: number
+  status: 'open' | 'closed'
+  notes: string
+  tags: string
+}
+
+export interface Instrument {
+  symbol: string
+  point_value: number
+  tick_size: number
+  last: number | null
 }
 
 // ---------------------------------------------------------------- market ----
@@ -207,10 +321,25 @@ export const saveScript = (name: string, kind: Script['kind'], source: string) =
   api<Script>('/scripts', json('PUT', { name, kind, source }))
 export const deleteScript = (id: number) => api(`/scripts/${id}`, json('DELETE'))
 
+export interface Template<S = unknown> {
+  id: number
+  kind: 'indicators' | 'chart' | 'drawing'
+  name: string
+  spec: S
+}
+export const getTemplates = <S>(kind: Template['kind']) => api<Template<S>[]>(`/templates?kind=${kind}`)
+export const saveTemplate = <S>(kind: Template['kind'], name: string, spec: S) =>
+  api<Template<S>>('/templates', json('PUT', { kind, name, spec }))
+export const deleteTemplate = (id: number) => api(`/templates/${id}`, json('DELETE'))
+
 // ---------------------------------------------------------------- alerts ----
 export const getAlerts = () => api<Alert[]>('/alerts')
-export const createAlert = (a: { symbol: string; condition: AlertCondition; price: number; message?: string; once?: boolean }) =>
-  api<Alert>('/alerts', json('POST', a))
+export const createAlert = (a: AlertIn) => api<Alert>('/alerts', json('POST', a))
+export const updateAlert = (id: number, a: AlertIn) => api<Alert>(`/alerts/${id}`, json('PUT', a))
+export const getAlertCatalog = () => api<AlertCatalog>('/alerts/catalog')
+export const getNotifySettings = () => api<NotifySettings>('/alerts/settings')
+export const saveNotifySettings = (s: NotifySettings) => api<NotifySettings>('/alerts/settings', json('PUT', s))
+export const testNotify = (n: AlertNotify) => api<{ status: string }>('/alerts/test', json('POST', n))
 export const setAlertActive = (id: number, active: boolean) => api<Alert>(`/alerts/${id}?active=${active}`, json('PATCH'))
 export const deleteAlert = (id: number) => api(`/alerts/${id}`, json('DELETE'))
 export const getAlertLog = () => api<AlertLogEntry[]>('/alerts/log')
@@ -218,10 +347,21 @@ export const getAlertLog = () => api<AlertLogEntry[]>('/alerts/log')
 // ----------------------------------------------------------------- paper ----
 export const getPaper = () =>
   api<{ account: PaperAccount; positions: PaperPosition[]; orders: PaperOrder[] }>('/paper/account')
-export const placeOrder = (o: { symbol: string; side: 'buy' | 'sell'; type: PaperOrder['type']; qty: number; price?: number }) =>
-  api<PaperOrder>('/paper/orders', json('POST', o))
+export const placeOrder = (o: OrderIn) => api<PaperOrder>('/paper/orders', json('POST', o))
+export const modifyOrder = (id: number, m: OrderModify) => api<PaperOrder>(`/paper/orders/${id}`, json('PATCH', m))
 export const cancelOrder = (id: number) => api(`/paper/orders/${id}`, json('DELETE'))
+export const cancelAllOrders = (symbol?: string) =>
+  api<{ cancelled: number }>(`/paper/orders${symbol ? `?symbol=${enc(symbol)}` : ''}`, json('DELETE'))
 export const closePosition = (symbol: string) => api<PaperOrder>(`/paper/positions/${enc(symbol)}/close`, json('POST'))
+export const reversePosition = (symbol: string) => api<PaperOrder>(`/paper/positions/${enc(symbol)}/reverse`, json('POST'))
+export const setPositionBrackets = (symbol: string, b: { tp?: number | null; sl?: number | null }) =>
+  api<PaperOrder[]>(`/paper/positions/${enc(symbol)}/brackets`, json('PUT', b))
+export const flattenAll = () => api<{ cancelled: number; closed: number }>('/paper/flatten', json('POST'))
+export const savePaperSettings = (s: { starting_balance?: number; commission?: number }) =>
+  api<PaperAccount>('/paper/settings', json('PUT', s))
+export const getInstrument = (symbol: string) => api<Instrument>(`/paper/instrument?symbol=${enc(symbol)}`)
+export const getTrades = (symbol?: string) => api<PaperTrade[]>(`/paper/trades${symbol ? `?symbol=${enc(symbol)}` : ''}`)
+export const annotateTrade = (id: number, n: { notes?: string; tags?: string }) => api<PaperTrade>(`/paper/trades/${id}`, json('PATCH', n))
 export const resetPaper = () => api<PaperAccount>('/paper/reset', json('POST'))
 
 // ---------------------------------------------------- NinjaTrader route ----
@@ -233,7 +373,7 @@ export interface NinjaStatus {
   can_trade: boolean
 }
 export const getNinjaStatus = () => api<NinjaStatus>('/broker/ninja/status')
-export const placeNinjaOrder = (o: { symbol: string; side: 'buy' | 'sell'; type: PaperOrder['type']; qty: number; price?: number }) =>
+export const placeNinjaOrder = (o: { symbol: string; side: 'buy' | 'sell'; type: 'market' | 'limit' | 'stop'; qty: number; price?: number }) =>
   api<{ ref: string; status: string; contract: string; account: string }>('/broker/ninja/orders', json('POST', o))
 
 // ------------------------------------------------------------------- auth ----
@@ -256,3 +396,104 @@ export const postLogin = (username: string, password: string) => {
     return (await res.json()) as AuthResponse
   })
 }
+
+// ---------------------------------------------------------------- market ----
+export type MarketSource = 'live' | 'demo'
+
+export interface NewsItem {
+  id: string
+  title: string
+  summary: string
+  publisher: string
+  url: string
+  time: number | null
+  thumbnail: string | null
+  tickers: string[]
+}
+
+export interface EarningsPoint {
+  time: number
+  eps_estimate: number | null
+  eps_actual: number | null
+  surprise_pct: number | null
+}
+
+export interface Fundamentals {
+  symbol: string
+  yahoo: string
+  source: MarketSource
+  name?: string | null
+  short_name?: string | null
+  sector?: string | null
+  industry?: string | null
+  country?: string | null
+  website?: string | null
+  summary?: string | null
+  currency?: string | null
+  exchange?: string | null
+  quote_type?: string | null
+  employees?: number | null
+  recommendation?: string | null
+  next_earnings?: number | null
+  earnings?: EarningsPoint[]
+  [key: string]: unknown
+}
+
+export interface MarketEvent {
+  time: number
+  kind: 'earnings' | 'dividend' | 'split'
+  value: number | null
+  label: string
+  upcoming?: boolean
+}
+
+export interface QuoteRow {
+  symbol: string
+  name: string
+  last: number
+  prev_close: number | null
+  change: number | null
+  change_pct: number | null
+  volume: number | null
+  spark: number[]
+}
+
+export interface HeatTile {
+  symbol: string
+  name: string
+  sector: string
+  market_cap: number
+  last: number
+  change_pct: number | null
+  volume: number | null
+}
+
+export interface EconEvent {
+  time: number
+  country: string
+  title: string
+  impact: 'high' | 'medium' | 'low' | 'holiday'
+  actual: string | null
+  forecast: string | null
+  previous: string | null
+}
+
+export interface EarningsRow {
+  symbol: string
+  name: string
+  time: number
+  eps_estimate: number | null
+  revenue_estimate: number | null
+}
+
+export const getNews = (symbol?: string) =>
+  api<{ symbol: string | null; source: MarketSource; items: NewsItem[] }>(`/market/news${symbol ? `?symbol=${enc(symbol)}` : ''}`)
+export const getFundamentals = (symbol: string) => api<Fundamentals>(`/market/fundamentals?symbol=${enc(symbol)}`)
+export const getMarketEvents = (symbol: string) =>
+  api<{ symbol: string; source: MarketSource; events: MarketEvent[] }>(`/market/events?symbol=${enc(symbol)}`)
+export const getOverview = () =>
+  api<{ source: MarketSource; groups: { name: string; rows: QuoteRow[] }[]; gainers: HeatTile[]; losers: HeatTile[]; active: HeatTile[] }>('/market/overview')
+export const getHeatmap = () => api<{ source: MarketSource; tiles: HeatTile[] }>('/market/heatmap')
+export const getEconCalendar = () => api<{ source: MarketSource; rows: EconEvent[] }>('/market/calendar')
+export const getEarningsCalendar = (symbols: string[]) =>
+  api<{ source: MarketSource; rows: EarningsRow[] }>(`/market/earnings?symbols=${enc(symbols.join(','))}`)

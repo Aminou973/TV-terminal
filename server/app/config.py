@@ -48,6 +48,24 @@ class Settings(BaseSettings):
     # built web app (web/dist) to serve from this process; empty/missing = API only
     web_dist: Path = Path("../web/dist")
 
+    # -- alert delivery ------------------------------------------------------
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_tls: bool = True
+    # fallback bot for users who only set a chat id
+    telegram_bot_token: str = ""
+    # webhooks to localhost/LAN addresses are refused unless this is on
+    alerts_allow_private_webhooks: bool = False
+
+    # -- market data (news, fundamentals, calendars, heatmap) ----------------
+    # live sources: Yahoo via yfinance + the Forex Factory weekly calendar;
+    # demo data is served when they are off or unreachable
+    market_live: bool = True
+    market_calendar_url: str = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+
     # -- streaming -----------------------------------------------------------
     # throttle for forming-bar updates pushed per symbol (seconds)
     bar_throttle: float = 0.2

@@ -19,3 +19,4 @@ os.environ["OPENTERM_REPLAY_SYMBOL"] = "SIM:ES"
 os.environ["OPENTERM_CCXT_ENABLED"] = "false"
 os.environ["OPENTERM_NINJA_ENABLED"] = "false"
 os.environ["OPENTERM_YF_ENABLED"] = "false"
+os.environ["OPENTERM_MARKET_LIVE"] = "false"  # demo market data: no network in tests

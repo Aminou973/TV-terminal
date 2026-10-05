@@ -1,29 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createAlert, deleteLayout, getLayouts, getQuote, saveLayout, type AlertCondition, type Layout } from '../api/client'
+import { useEffect, useMemo, useState } from 'react'
+import { deleteLayout, getLayouts, saveLayout, type Layout } from '../api/client'
 import { loadRegistry, type IndicatorDef, type InputSpec } from '../chart/indicators'
 import { resolveIndicator } from '../chart/catalog'
-import { toast, useAlerts, useScripts, useSymbols } from '../data'
+import { toast, useScripts, useSymbols } from '../data'
 import { OrderTicket } from '../panels/TradingPanel'
+import { ChartSettingsDialog, CompareDialog, DrawingSettingsDialog, IndicatorTemplates } from './ChartDialogs'
+import AlertDialog from './AlertDialog'
+import { Modal } from './Modal'
+import NotifySettingsDialog from './NotifySettingsDialog'
 import { DEFAULT_LAYOUT, layoutSpec, useTerminal, useUi, type LayoutSpec } from '../store'
-
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-  return (
-    <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-label={title}>
-        <div className="modal-head">
-          <span>{title}</span>
-          <button onClick={onClose} aria-label="Close">×</button>
-        </div>
-        <div className="modal-body">{children}</div>
-      </div>
-    </div>
-  )
-}
 
 // ------------------------------------------------------------- symbol ------
 function SymbolSearch({ onClose }: { onClose: () => void }) {
@@ -82,7 +67,7 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
   const [all, setAll] = useState<IndicatorDef[] | null>(null)
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('Favorites')
-  const [group, setGroup] = useState<'built-in' | 'community' | 'scripts'>('built-in')
+  const [group, setGroup] = useState<'built-in' | 'community' | 'scripts' | 'templates'>('built-in')
 
   useEffect(() => {
     loadRegistry().then(setAll).catch((e) => toast('Indicators failed to load', String(e.message), 'error'))
@@ -119,11 +104,15 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
             <button className={group === 'built-in' ? 'on' : ''} onClick={() => setGroup('built-in')}>Technicals</button>
             <button className={group === 'community' ? 'on' : ''} onClick={() => setGroup('community')}>Community</button>
             <button className={group === 'scripts' ? 'on' : ''} onClick={() => setGroup('scripts')}>My scripts</button>
+            <button className={group === 'templates' ? 'on' : ''} onClick={() => setGroup('templates')}>Templates</button>
           </div>
-          {group !== 'scripts' && cats.map((c) => (
+          {group !== 'scripts' && group !== 'templates' && cats.map((c) => (
             <button key={c} className={`cat ${c === cat ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>
           ))}
         </div>
+        {group === 'templates' ? (
+          <IndicatorTemplates onApplied={onClose} />
+        ) : (
         <div className="pick-list">
           {!all && <p className="muted pad">Loading the indicator library…</p>}
           {group === 'scripts'
@@ -141,6 +130,7 @@ function IndicatorsDialog({ onClose }: { onClose: () => void }) {
               ))}
           {group === 'scripts' && scripts.length === 0 && <p className="muted pad">Write one in the editor (bottom panel) and save it.</p>}
         </div>
+        )}
       </div>
     </Modal>
   )
@@ -194,66 +184,6 @@ function IndicatorSettings({ uid, onClose }: { uid: string; onClose: () => void 
         <span className="spacer" />
         <button onClick={onClose}>Cancel</button>
         <button className="primary" onClick={() => { update(uid, { inputs: vals }); onClose() }}>OK</button>
-      </div>
-    </Modal>
-  )
-}
-
-// --------------------------------------------------------------- alert -----
-function AlertDialog({ symbol, price, onClose }: { symbol: string; price: number; onClose: () => void }) {
-  const [sym, setSym] = useState(symbol)
-  const [cond, setCond] = useState<AlertCondition>('crossing')
-  const [level, setLevel] = useState(Number.isFinite(price) ? String(price) : '')
-  const [message, setMessage] = useState('')
-  const [once, setOnce] = useState(true)
-  const touched = useRef(false)
-
-  useEffect(() => {
-    if (Number.isFinite(price)) return
-    getQuote([symbol]).then(({ quotes }) => {
-      if (!touched.current && quotes[0]) setLevel(String(quotes[0].last))
-    }).catch(() => {})
-  }, [symbol, price])
-
-  const submit = async () => {
-    try {
-      await createAlert({ symbol: sym, condition: cond, price: Number(level), message, once })
-      await useAlerts.getState().refresh()
-      toast('Alert created', `${sym} ${cond.replace('_', ' ')} ${level}`, 'success')
-      onClose()
-    } catch (e) {
-      toast('Alert failed', String((e as Error).message), 'error')
-    }
-  }
-
-  return (
-    <Modal title="Create alert" onClose={onClose}>
-      <div className="form">
-        <label><span>Symbol</span><input value={sym} onChange={(e) => setSym(e.target.value)} /></label>
-        <label>
-          <span>Condition</span>
-          <select value={cond} onChange={(e) => setCond(e.target.value as AlertCondition)}>
-            <option value="crossing">Crossing</option>
-            <option value="crossing_up">Crossing up</option>
-            <option value="crossing_down">Crossing down</option>
-            <option value="greater">Greater than</option>
-            <option value="less">Less than</option>
-          </select>
-        </label>
-        <label><span>Price</span><input type="number" step="any" value={level} onChange={(e) => { touched.current = true; setLevel(e.target.value) }} /></label>
-        <label><span>Message</span><input placeholder="optional" value={message} onChange={(e) => setMessage(e.target.value)} /></label>
-        <label><span>Trigger</span>
-          <select value={once ? 'once' : 'every'} onChange={(e) => setOnce(e.target.value === 'once')}>
-            <option value="once">Only once</option>
-            <option value="every">Every time</option>
-          </select>
-        </label>
-      </div>
-      <div className="modal-foot">
-        <span className="muted small">Evaluated on the server on every tick; also shows as a browser notification.</span>
-        <span className="spacer" />
-        <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={!sym || !level} onClick={submit}>Create</button>
       </div>
     </Modal>
   )
@@ -316,9 +246,17 @@ export default function Dialogs() {
     case 'indicatorSettings':
       return <IndicatorSettings uid={dialog.uid} onClose={close} />
     case 'alert':
-      return <AlertDialog symbol={dialog.symbol} price={dialog.price} onClose={close} />
+      return <AlertDialog symbol={dialog.symbol} price={dialog.price} line={dialog.line} alertId={dialog.alertId} onClose={close} />
+    case 'notifySettings':
+      return <NotifySettingsDialog onClose={close} />
     case 'layouts':
       return <LayoutsDialog onClose={close} />
+    case 'chartSettings':
+      return <ChartSettingsDialog onClose={close} />
+    case 'compare':
+      return <CompareDialog onClose={close} />
+    case 'drawingSettings':
+      return <DrawingSettingsDialog paneId={dialog.paneId} drawingId={dialog.drawingId} onClose={close} />
     case 'order':
       return (
         <Modal title={`${dialog.side === 'buy' ? 'Buy' : 'Sell'} ${dialog.symbol}`} onClose={close}>

@@ -157,3 +157,42 @@ async def save_script(body: ScriptIn, user: dict = Depends(get_current_user)):
 async def delete_script(sid: int, user: dict = Depends(get_current_user)):
     await _exec("DELETE FROM scripts WHERE id = ? AND user_id = ?", (sid, user["id"]))
     return {"ok": True}
+
+
+# -------------------------------------------------------------- templates ---
+# Named presets: indicator sets, chart settings, drawing styles.
+TemplateKind = Literal["indicators", "chart", "drawing"]
+
+
+class TemplateIn(BaseModel):
+    kind: TemplateKind
+    name: str = Field(min_length=1, max_length=64)
+    spec: Any
+
+
+@router.get("/templates")
+async def list_templates(kind: TemplateKind, user: dict = Depends(get_current_user)):
+    rows = await _q_all(
+        "SELECT id, kind, name, spec FROM templates WHERE user_id = ? AND kind = ? ORDER BY name", (user["id"], kind)
+    )
+    return [{**r, "spec": json.loads(r["spec"])} for r in rows]
+
+
+@router.put("/templates")
+async def save_template(body: TemplateIn, user: dict = Depends(get_current_user)):
+    await _exec(
+        "INSERT INTO templates (user_id, kind, name, spec) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(user_id, kind, name) DO UPDATE SET spec = excluded.spec",
+        (user["id"], body.kind, body.name, _dump(body.spec)),
+    )
+    row = await _q_one(
+        "SELECT id, kind, name, spec FROM templates WHERE user_id = ? AND kind = ? AND name = ?",
+        (user["id"], body.kind, body.name),
+    )
+    return {**row, "spec": json.loads(row["spec"])}
+
+
+@router.delete("/templates/{tid}")
+async def delete_template(tid: int, user: dict = Depends(get_current_user)):
+    await _exec("DELETE FROM templates WHERE id = ? AND user_id = ?", (tid, user["id"]))
+    return {"ok": True}

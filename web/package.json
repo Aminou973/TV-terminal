@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:engine": "esbuild src/scripts/engine.ts --bundle --format=iife --global-name=OpenScript --target=es2020 --outfile=../server/app/alerts/openscript.js --banner:js=\"// GENERATED from web/src/scripts/engine.ts by npm run build:engine \u2014 do not edit\""
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

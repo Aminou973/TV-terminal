@@ -137,3 +137,14 @@ def test_weekly_and_monthly_buckets():
     # CME Sunday 18:00 CT belongs to Monday's session → same week as Wednesday
     sun_eve = int(datetime(2026, 10, 4, 23, tzinfo=timezone.utc).timestamp())
     assert bucket_start_s(sun_eve, "1W", "ES") == bucket_start_s(wed, "1W", "ES")
+
+
+def test_custom_intervals():
+    from app.candles.resample import TF_SECONDS, bucket_start_s, tf_seconds
+
+    assert tf_seconds("7m") == 420 and tf_seconds("90m") == 5400 and tf_seconds("3h") == 10800
+    assert "7m" in TF_SECONDS and "0m" not in TF_SECONDS and "2D" not in TF_SECONDS and "x" not in TF_SECONDS
+    assert tf_seconds("1441m") is None and tf_seconds("25h") is None
+    assert bucket_start_s(1_000_000, "7m", "BINANCE-BTCUSDT") == 1_000_000 // 420 * 420
+    bars = [Bar("X", t, 1, 1, 1, 1, 1) for t in range(0, 1800, 60)]
+    assert [b.time for b in resample(bars, "10m")] == [0, 600, 1200]

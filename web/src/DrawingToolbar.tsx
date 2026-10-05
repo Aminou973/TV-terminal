@@ -66,6 +66,9 @@ export default function DrawingToolbar() {
   const setStay = useTerminal((s) => s.setStayInDrawing)
   const hidden = useTerminal((s) => s.drawingsHidden)
   const setHidden = useTerminal((s) => s.setDrawingsHidden)
+  const favTools = useTerminal((s) => s.favTools)
+  const toggleFav = useTerminal((s) => s.toggleFavTool)
+  const [showFavs, setShowFavs] = useState(true)
   const [lastUsed, setLastUsed] = useState<Record<string, string>>({})
   const [open, setOpen] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -119,9 +122,14 @@ export default function DrawingToolbar() {
               <div className="tb-flyout">
                 <div className="tb-flyout-title">{g.title}</div>
                 {g.tools.map((k) => (
-                  <button key={k} className={tool === k ? 'on' : ''} onClick={() => pick(g.id, k)}>
-                    {toolLabel(k)}
-                  </button>
+                  <div key={k} className="dd-row">
+                    <button className={tool === k ? 'on' : ''} onClick={() => pick(g.id, k)}>
+                      {toolLabel(k)}
+                    </button>
+                    <button className={`star ${favTools.includes(k) ? 'on' : ''}`} title="Favourite" onClick={() => toggleFav(k)}>
+                      ★
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -129,6 +137,18 @@ export default function DrawingToolbar() {
         )
       })}
       <div className="tb-sep" />
+      <button className={`tb ${showFavs ? 'on' : ''}`} title="Favourite tools bar" onClick={() => setShowFavs(!showFavs)}>
+        <Icon.star />
+      </button>
+      {showFavs && favTools.length > 0 && (
+        <div className="fav-bar" role="toolbar" aria-label="Favourite drawing tools">
+          {favTools.map((k) => (
+            <button key={k} className={tool === k ? 'on' : ''} onClick={() => setTool(tool === k ? null : k)} title={toolLabel(k)}>
+              {toolLabel(k)}
+            </button>
+          ))}
+        </div>
+      )}
       <button
         className={`tb ${magnet !== 'off' ? 'on' : ''}`}
         title={`Magnet: ${magnet}`}

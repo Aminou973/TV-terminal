@@ -39,6 +39,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # the server runs script alerts with a bundled copy of the script engine
+      - name: Bundled OpenScript engine is up to date
+        run: npm run build:engine && git diff --exit-code ../server/app/alerts/openscript.js
 
   docker:
     runs-on: ubuntu-latest

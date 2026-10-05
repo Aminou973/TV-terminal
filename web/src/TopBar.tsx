@@ -1,19 +1,85 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { saveLayout } from './api/client'
+import { getPane } from './chart/registry'
 import { stream } from './chart/stream'
 import { toast } from './data'
 import { Icon } from './icons'
-import { GRID_PANES, TFS, layoutSpec, useAuth, useTerminal, useUi, type ChartType, type Grid } from './store'
+import { GRID_PANES, TFS, layoutSpec, parseTf, useAuth, useTerminal, useUi, type ChartType, type Grid } from './store'
 
-const CHART_TYPES: { id: ChartType; label: string }[] = [
-  { id: 'candles', label: 'Candles' },
-  { id: 'hollow', label: 'Hollow candles' },
-  { id: 'heikin', label: 'Heikin Ashi' },
-  { id: 'bars', label: 'Bars' },
-  { id: 'line', label: 'Line' },
-  { id: 'area', label: 'Area' },
-  { id: 'baseline', label: 'Baseline' },
+const CHART_TYPES: { group: string; items: { id: ChartType; label: string }[] }[] = [
+  {
+    group: 'Time-based',
+    items: [
+      { id: 'candles', label: 'Candles' },
+      { id: 'hollow', label: 'Hollow candles' },
+      { id: 'heikin', label: 'Heikin Ashi' },
+      { id: 'bars', label: 'Bars' },
+      { id: 'columns', label: 'Columns' },
+      { id: 'line', label: 'Line' },
+      { id: 'area', label: 'Area' },
+      { id: 'baseline', label: 'Baseline' },
+    ],
+  },
+  {
+    group: 'Price-based',
+    items: [
+      { id: 'renko', label: 'Renko' },
+      { id: 'range', label: 'Range' },
+      { id: 'linebreak', label: 'Line break' },
+      { id: 'kagi', label: 'Kagi' },
+      { id: 'pnf', label: 'Point & figure' },
+    ],
+  },
 ]
+
+/** Favourite intervals as buttons, every interval (and a custom one) in a dropdown. */
+function Intervals() {
+  const tf = useTerminal((s) => s.panes[s.active].tf)
+  const fav = useTerminal((s) => s.favTfs)
+  const { setTf, toggleFavTf } = useTerminal.getState()
+  const [open, setOpen] = useState(false)
+  const [custom, setCustom] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [])
+  const shown = fav.includes(tf) ? fav : [...fav, tf]
+  return (
+    <div className="tfs" ref={ref}>
+      {shown.map((t) => (
+        <button key={t} className={t === tf ? 'on' : ''} onClick={() => setTf(t)}>
+          {t}
+        </button>
+      ))}
+      <button className="tf-more" title="All intervals" onClick={() => setOpen(!open)}>▾</button>
+      {open && (
+        <div className="dropdown tf-drop">
+          {TFS.map((t) => (
+            <div key={t} className={`dd-row ${t === tf ? 'on' : ''}`}>
+              <button onClick={() => { setTf(t); setOpen(false) }}>{t}</button>
+              <button className={`star ${fav.includes(t) ? 'on' : ''}`} title="Favourite" onClick={() => toggleFavTf(t)}>★</button>
+            </div>
+          ))}
+          <form
+            className="dd-custom"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const t = parseTf(custom)
+              if (!t) return toast('Invalid interval', 'Use e.g. 7, 90, 3h, 1D', 'warn')
+              setTf(t)
+              setCustom('')
+              setOpen(false)
+            }}
+          >
+            <input placeholder="Custom: 7, 45, 3h…" value={custom} onChange={(e) => setCustom(e.target.value)} />
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const GRIDS: { id: Grid; label: string }[] = [
   { id: '1', label: '1 chart' },
@@ -63,21 +129,22 @@ export default function TopBar() {
         <Icon.search /> <b>{pane.symbol}</b>
       </button>
 
-      <div className="tfs">
-        {TFS.map((tf) => (
-          <button key={tf} className={tf === pane.tf ? 'on' : ''} onClick={() => t().setTf(tf)}>
-            {tf}
-          </button>
-        ))}
-      </div>
+      <Intervals />
 
       <select className="tb-select" value={pane.chartType} onChange={(e) => t().setChartType(e.target.value as ChartType)} title="Chart type">
-        {CHART_TYPES.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label}
-          </option>
+        {CHART_TYPES.map((g) => (
+          <optgroup key={g.group} label={g.group}>
+            {g.items.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
+      <button className="tb-icon" onClick={() => open({ kind: 'compare' })} title="Compare or add symbol">
+        <Icon.plus />
+      </button>
 
       <button className="tb-btn" onClick={() => open({ kind: 'indicators' })} title="Indicators & strategies">
         <Icon.indicators /> <span>Indicators</span>
@@ -98,6 +165,18 @@ export default function TopBar() {
       </button>
 
       <span className="spacer" />
+      <button className="tb-icon" onClick={() => getPane(pane.id)?.undo()} title="Undo drawing (Ctrl+Z)">
+        <Icon.undo />
+      </button>
+      <button className="tb-icon" onClick={() => getPane(pane.id)?.redo()} title="Redo drawing (Ctrl+Y)">
+        <Icon.redo />
+      </button>
+      <button className="tb-icon" onClick={() => open({ kind: 'chartSettings' })} title="Chart settings">
+        <Icon.gear />
+      </button>
+      <button className="tb-icon" onClick={() => void getPane(pane.id)?.snapshot()} title="Snapshot (Alt+S)">
+        <Icon.camera />
+      </button>
 
       <select className="tb-select" value={grid} onChange={(e) => t().setGrid(e.target.value as Grid)} title="Chart layout">
         {GRIDS.map((g) => (

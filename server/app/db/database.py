@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS paper_orders (
     user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     symbol       TEXT NOT NULL,
     side         TEXT NOT NULL,          -- buy | sell
-    type         TEXT NOT NULL,          -- market | limit | stop
+    type         TEXT NOT NULL,          -- market | limit | stop | stop_limit | trailing_stop
     qty          REAL NOT NULL,
     price        REAL,                   -- limit / stop trigger price
     status       TEXT NOT NULL,          -- working | filled | cancelled | rejected
@@ -98,6 +98,41 @@ CREATE TABLE IF NOT EXISTS paper_positions (
     qty          REAL NOT NULL,          -- signed: + long, - short
     avg_price    REAL NOT NULL,
     PRIMARY KEY (user_id, symbol)
+);
+CREATE TABLE IF NOT EXISTS paper_trades (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    symbol       TEXT NOT NULL,
+    side         TEXT NOT NULL,          -- long | short
+    qty          REAL NOT NULL,          -- largest size held during the trade
+    entry_price  REAL NOT NULL,          -- average entry
+    exit_price   REAL,                   -- average exit
+    exit_qty     REAL NOT NULL DEFAULT 0,
+    entry_ms     INTEGER NOT NULL,
+    exit_ms      INTEGER,
+    pnl          REAL NOT NULL DEFAULT 0, -- net of commission
+    commission   REAL NOT NULL DEFAULT 0,
+    high         REAL NOT NULL,          -- price extremes while open (for MAE / MFE)
+    low          REAL NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'open',
+    notes        TEXT NOT NULL DEFAULT '',
+    tags         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS paper_trades_user ON paper_trades(user_id, status);
+CREATE TABLE IF NOT EXISTS templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,          -- indicators | chart | drawing
+    name        TEXT NOT NULL,
+    spec        TEXT NOT NULL,
+    UNIQUE(user_id, kind, name)
+);
+CREATE TABLE IF NOT EXISTS notify_settings (
+    user_id            INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    webhook_url        TEXT NOT NULL DEFAULT '',
+    telegram_bot_token TEXT NOT NULL DEFAULT '',
+    telegram_chat_id   TEXT NOT NULL DEFAULT '',
+    email              TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS kv (
     key    TEXT PRIMARY KEY,
@@ -119,7 +154,42 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    # columns added after a table first shipped: (table, column, definition)
+    _ADDED_COLUMNS = [
+        ("alerts", "kind", "TEXT NOT NULL DEFAULT 'price'"),       # price | line | indicator | script
+        ("alerts", "params", "TEXT NOT NULL DEFAULT '{}'"),        # kind-specific spec (JSON)
+        ("alerts", "tf", "TEXT NOT NULL DEFAULT '1m'"),
+        ("alerts", "frequency", "TEXT NOT NULL DEFAULT 'once'"),   # once | once_per_bar | once_per_bar_close | once_per_minute | every_time
+        ("alerts", "expires_ms", "INTEGER"),
+        ("alerts", "notify", "TEXT NOT NULL DEFAULT '{}'"),        # {"webhook": url, "telegram": bool, "email": bool}
+        ("alerts", "last_fired_ms", "INTEGER"),
+        ("alerts", "last_bar", "INTEGER"),
+        ("alerts", "error", "TEXT"),
+        ("alert_log", "delivery", "TEXT NOT NULL DEFAULT ''"),
+        ("paper_accounts", "commission", "REAL NOT NULL DEFAULT 0"),  # $ per contract per side
+        ("paper_orders", "stop_price", "REAL"),        # stop_limit trigger
+        ("paper_orders", "trail", "REAL"),             # trailing_stop distance (price units)
+        ("paper_orders", "trail_ref", "REAL"),         # best price seen since placing
+        ("paper_orders", "triggered", "INTEGER NOT NULL DEFAULT 0"),
+        ("paper_orders", "parent_id", "INTEGER"),
+        ("paper_orders", "oco", "TEXT"),               # orders sharing a group cancel each other
+        ("paper_orders", "reduce_only", "INTEGER NOT NULL DEFAULT 0"),
+        ("paper_orders", "tag", "TEXT NOT NULL DEFAULT ''"),  # entry | tp | sl | close
+        ("paper_orders", "tp", "REAL"),                # bracket legs to attach when this fills
+        ("paper_orders", "sl", "REAL"),
+        ("paper_orders", "reason", "TEXT"),
+    ]
+
+    def _migrate(self) -> None:
+        for table, column, definition in self._ADDED_COLUMNS:
+            have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            if column not in have:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        # alerts created before frequencies existed: once=0 meant "every time"
+        self._conn.execute("UPDATE alerts SET frequency = 'every_time' WHERE once = 0 AND frequency = 'once'")
 
     def close(self) -> None:
         if self._conn is not None:

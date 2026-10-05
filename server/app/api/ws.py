@@ -26,6 +26,8 @@ import asyncio
 import logging
 import time
 
+import anyio
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app import runtime as runtime_module
@@ -206,16 +208,21 @@ async def stream(ws: WebSocket):
                     await send(ev.payload)
 
     # Run both directions; whichever ends first (client gone, send failed)
-    # tears the other down so the bus subscription is always released.
-    tasks = [asyncio.create_task(receiver()), asyncio.create_task(sender())]
+    # cancels the other. An anyio task group (what Starlette runs on) keeps
+    # cancellation from the server — or TestClient — scoped correctly.
+    async def run(fn) -> None:
+        try:
+            await fn()
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        except Exception as exc:  # noqa: BLE001
+            log.warning("ws stream ended with error: %r", exc)
+        finally:
+            tg.cancel_scope.cancel()
+
     try:
-        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        for t in done:
-            exc = t.exception()
-            if exc is not None and not isinstance(exc, (WebSocketDisconnect, RuntimeError)):
-                log.warning("ws stream ended with error: %r", exc)
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run, receiver)
+            tg.start_soon(run, sender)
     finally:
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
         runtime.bus.unsubscribe(q)
